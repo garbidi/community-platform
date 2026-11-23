@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Декларация · {{ snap.name }}{% if ver %} · версия {{ ver.no }}{% endif %}</title>
+<style>
+  :root { --ink: #16163a; --muted: #5b5b72; --rule: #c9c6bd; --accent: #d9481c; --paper: #fff; --bg: #efece4; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 11pt/1.45 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px;
+         background: var(--ink); color: #fff; font-size: 14px; }
+  .bar a { color: #fff; }
+  .bar button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+  .bar .tag { opacity: .75; }
+  .sheet { background: var(--paper); max-width: 210mm; margin: 16px auto; padding: 18mm 16mm; box-shadow: 0 2px 12px rgb(0 0 0 / .08); }
+  .kicker { text-transform: uppercase; letter-spacing: .12em; font-size: 9pt; color: var(--muted); margin: 0; }
+  h1 { font-size: 20pt; margin: 2mm 0 1mm; letter-spacing: -.01em; }
+  .meta { color: var(--muted); margin: 0 0 6mm; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: .08em; margin: 7mm 0 2mm; padding-bottom: 1.5mm; border-bottom: 1.5px solid var(--ink); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600;
+       padding: 1.5mm 2mm; border-bottom: 1px solid var(--rule); }
+  td { padding: 2.2mm 2mm; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tr { break-inside: avoid; }
+  td.no { width: 8mm; font-weight: 700; }
+  td.dl { width: 24mm; white-space: nowrap; }
+  td.pr { width: 46mm; color: var(--muted); }
+  .goal { font-weight: 600; }
+  .steps { margin: 1mm 0 0; padding-left: 4.5mm; color: var(--muted); font-size: 9.5pt; }
+  .steps li { margin: .3mm 0; }
+  .terms { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2mm 8mm; margin: 0; }
+  .terms div { border-bottom: 1px solid var(--rule); padding: 1.5mm 0; break-inside: avoid; }
+  .terms, .changes { break-inside: avoid; }
+  h2 { break-after: avoid; }
+  .terms dt { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .terms dd { margin: .5mm 0 0; font-weight: 600; }
+  .changes { margin: 0; padding-left: 5mm; font-size: 10pt; }
+  .note { font-size: 9.5pt; color: var(--muted); margin: 2mm 0 0; }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 12mm; break-inside: avoid; }
+  .sign .line { border-bottom: 1px solid var(--ink); height: 12mm; }
+  .sign p { margin: 1.5mm 0 0; font-size: 9pt; color: var(--muted); }
+  .foot { margin-top: 8mm; font-size: 8pt; color: var(--muted); display: flex; justify-content: space-between; gap: 8mm; }
+  @media (max-width: 640px) {
+    .sheet { margin: 0; padding: 20px 16px; box-shadow: none; }
+    .terms, .sign { grid-template-columns: 1fr; }
+    td.pr { width: auto; }
+  }
+  @media print {
+    html, body { background: #fff; }
+    .bar { display: none; }
+    .sheet { margin: 0; padding: 0; box-shadow: none; max-width: none; }
+    @page { size: A4; margin: 15mm 14mm; }
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/participants/{{ -p.id }}?tab=decl">← к карточке</a>
+  <button type="button" onclick="window.print()">Печать / PDF</button>
+  <span class="tag">{% if ver %}Версия {{ ver.no }} · {{ ver.status }}{% if ver.status == 'подписана' %} {{ ver.signed_on|d }}{% endif %}{% else %}Черновик — версия ещё не заведена{% endif %}</span>
+</div>
+
+<main class="sheet">
+  <p class="kicker">Мастермайнд «Вершина» · поток {{ snap.flow }}{% if f and f.start and f.finish %} · {{ f.start|d }} — {{ f.finish|d }}{% endif %}</p>
+  <h1>Декларация</h1>
+  <p class="meta"><b>{{ snap.name }}</b>{% if team %} · {{ team }}{% endif %}{% if mentors %} · менторы: {{ mentors | join(', ') }}{% endif %}</p>
+
+  <h2>Цели на поток</h2>
+  <table>
+    <thead><tr><th>№</th><th>Цель и шаги</th><th>Срок</th><th>Чем подтвержу</th></tr></thead>
+    <tbody>
+    {% for g in snap.goals %}
+    <tr>
+      <td class="no">{{ g.no }}</td>
+      <td><div class="goal">{{ g.title }}</div>
+        {% if g.steps %}<ol class="steps">{% for s in g.steps %}<li>{{ s.title }}{% if s.deadline %} — до {{ s.deadline|d }}{% endif %}</li>{% endfor %}</ol>{% endif %}</td>
+      <td class="dl">{{ g.deadline|d if g.deadline else '—' }}</td>
+      <td class="pr">{{ g.proof or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Условия</h2>
+  <dl class="terms">
+    <div><dt>Цель в деньгах</dt><dd>{{ snap.money_goal|money if snap.money_goal else '—' }}</dd></div>
+    <div><dt>Личная планка по вовлечению</dt><dd>{{ snap.planka or '—' }}{% if snap.planka %} чел.{% endif %}</dd></div>
+    <div><dt>Цена слова</dt><dd>{{ snap.word_price or '—' }}</dd></div>
+    <div><dt>Плюшка</dt><dd>{{ snap.perk or '—' }}</dd></div>
+  </dl>
+
+  {% if changes %}
+  <h2>Изменения с версии {{ prev.no }}{% if prev.signed_on %}, подписанной {{ prev.signed_on|d }}{% endif %}</h2>
+  <ul class="changes">{% for c in changes %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  <p class="note">Подписывая декларацию, я беру на себя обязательство выполнить эти цели к указанным срокам.</p>
+
+  <div class="sign">
+    <div><div class="line"></div><p>Участник: {{ snap.name }} · подпись, дата</p></div>
+    <div><div class="line"></div><p>Ментор / трекер · подпись, дата</p></div>
+  </div>
+
+  <div class="foot">
+    <span>{% if ver %}Версия {{ ver.no }} от {{ ver.created_at|d }}{% else %}Черновик{% endif %}</span>
+    <span>vershina · платформа потока</span>
+  </div>
+</main>
+</body>
+</html>

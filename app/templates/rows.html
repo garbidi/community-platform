@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Таблица {{ f.name }} · Вершина{% endblock %}
+{% block body %}
+{% set live_rows = rows|selectattr('status', 'equalto', 'в потоке')|rejectattr('moved_to')|list %}
+{% set unknown = live_rows|selectattr('group', 'equalto', 'Кто вовлёк — уточнить')|list %}
+{% set paid_total = live_rows|map(attribute='paid')|map('first')|sum %}
+
+<header class="sheethead">
+  <div class="sheethead__title">
+    <h1><span class="brace">{</span>Таблица<span class="brace">}</span></h1>
+    <nav class="flowtabs" aria-label="Поток">
+      {% for x in all_flows if x.status != 'завершён' or x.id == f.id %}
+      <a href="/rows?flow={{ x.id }}"{% if x.id == f.id %} aria-current="page"{% endif %}
+         title="{{ x.status }}{% if x.start %}, старт {{ x.start|d }}{% endif %}">{{ x.name }}</a>
+      {% endfor %}
+      <a class="flowtabs__new" href="/flows" title="Создать поток">+</a>
+    </nav>
+  </div>
+  <dl class="sheetstats">
+    <div><dt>в потоке</dt><dd>{{ live_rows|length }}</dd></div>
+    <div><dt>оплачено</dt><dd>{{ paid_total|money }}</dd></div>
+    {% if unknown %}<div class="sheetstats--warn"><dt>без вовлёкшего</dt><dd><a href="#unknown">{{ unknown|length }}</a></dd></div>{% endif %}
+    {% if inbox %}<div class="sheetstats--warn"><dt>оплат без потока</dt><dd><a href="#inbox">{{ inbox|length }}</a></dd></div>{% endif %}
+  </dl>
+</header>
+<p class="sheetnote">{% if target %}Новые оплаты с Тильды и безнала сами становятся строками в {{ target.name }}.{% else %}Нет потока, который ещё не начался, поэтому новые оплаты ждут ниже, пока вы не выберете поток.{% endif %}
+  Ячейки правятся щелчком, Enter сохраняет.</p>
+
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+
+{% if inbox %}
+<section class="inbox" id="inbox" aria-labelledby="inbox-h">
+  <h2 id="inbox-h">Оплаты без потока</h2>
+  <p class="sheetnote">Выберите поток: создастся строка или оплата ляжет в строку того же человека по телефону или нику.</p>
+  {% for p in inbox %}
+  <form class="inbox__item" method="post" action="/rows/inbox/{{ p.id }}">
+    <input type="hidden" name="back" value="{{ f.id }}">
+    <div class="inbox__who"><b>{{ p.name or 'Без имени' }}</b>
+      <span>{{ p.phone or '' }}{% if p.tg %}, {{ p.tg }}{% endif %}{% if p.city %}, {{ p.city }}{% endif %}</span></div>
+    <div class="inbox__inv">вовлёк: {{ p.engaged or 'не указано' }}</div>
+    <div class="inbox__sum">{{ p.amount|money if p.amount else 'сумма не указана' }}<span>{{ p.kind }}{% if p.paid_on %}, {{ p.paid_on|d }}{% endif %}</span></div>
+    <select name="flow_id" aria-label="Поток для {{ p.name }}">
+      {% for x in open_flows %}<option value="{{ x.id }}" {{ 'selected' if x.id == f.id }}>{{ x.name }}</option>{% endfor %}
+    </select>
+    <button name="action" value="place">В поток</button>
+    <button class="quiet" name="action" value="skip" data-confirm="Убрать оплату без строки? Например, это возврат или тестовый платёж.">Не нужна</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="sheetbar">
+  <form class="sheetbar__find" method="get" action="/rows" role="search"><input type="hidden" name="flow" value="{{ f.id }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Найти: имя, ник, ниша, пометка" aria-label="Поиск по строкам">
+    {% if tags %}
+    <select name="tag" aria-label="Тег" onchange="this.form.submit()"><option value="">Все теги</option>
+      {% for t in tags %}<option {{ 'selected' if t == tag }}>{{ t }}</option>{% endfor %}</select>
+    {% endif %}
+    {% if q or tag %}<a href="/rows?flow={{ f.id }}">Сбросить</a>{% endif %}
+  </form>
+  <button type="button" class="sheetbar__add" aria-expanded="false" aria-controls="addrow" id="addrow-btn">Добавить строку</button>
+</div>
+<form class="addrow" id="addrow" method="post" action="/flows/{{ f.id }}/rows" hidden>
+  <label class="addrow__name">Имя Фамилия<input name="name" required maxlength="80" autocomplete="off"></label>
+  <label>Телефон<input name="phone" inputmode="tel" autocomplete="off"></label>
+  <label>Телеграм<input name="username" placeholder="@ник" autocomplete="off"></label>
+  <label>Кто вовлёк<input name="inviter" list="inv-list" autocomplete="off"></label>
+  <label>Поток<select name="flow_id">
+    {% for x in open_flows %}<option value="{{ x.id }}" {{ 'selected' if x.id == f.id }}>{{ x.name }}</option>{% endfor %}</select></label>
+  <button>Добавить</button>
+</form>
+
+{% set lead = ['name', 'phone', 'username', 'inviter'] %}
+{% set ncols = 4 + cols|length %}
+<div class="grid" id="grid" tabindex="0" aria-label="Строки потока {{ f.name }}">
+<table>
+  <colgroup><col class="w-no"><col class="w-name"></colgroup>
+  <thead><tr>
+    <th class="fix fix--no" scope="col">№</th>
+    {% for k, title, _ in cols if k in lead %}<th scope="col" class="{{ 'fix fix--name' if k == 'name' }}">{{ title }}</th>{% endfor %}
+    <th scope="col" class="num">Оплачено</th>
+    <th scope="col">Теги</th>
+    {% for k, title, _ in cols if k not in lead %}<th scope="col">{{ title }}</th>{% endfor %}
+    <th scope="col">Разбор</th>
+    <th scope="col" class="num" title="Комментарии">Комм.</th>
+  </tr></thead>
+  <tbody>
+  {% set ns = namespace(g=None, n=0) %}
+  {% for r in rows %}
+  {% set live = not r.moved_to and r.status == 'в потоке' %}
+  {% set gkey = r.group if live else '·' %}
+  {% if gkey != ns.g %}{% set ns.g = gkey %}
+    {% if live %}{% set members = live_rows|selectattr('group', 'equalto', r.group)|list %}{% endif %}
+    <tr class="band{{ ' band--warn' if r.group == 'Кто вовлёк — уточнить' and live }}{{ ' band--gone' if not live }}"{% if r.group == 'Кто вовлёк — уточнить' and live %} id="unknown"{% endif %}>
+      <th colspan="{{ ncols }}" scope="rowgroup"><div class="band__in">
+        {% if not live %}<span class="band__name">Перенесены и выбывшие</span>
+        {% elif r.group == 'Кто вовлёк — уточнить' %}<span class="band__name">Кто вовлёк — неизвестно</span>
+          <span class="band__hint">В Тильде вписали не человека или его нет на платформе. Впишите в ячейку «Кто вовлёк» нужное имя, и строка перейдёт в его группу.</span>
+        {% else %}<span class="band__name">{{ r.group }}</span>
+          <span class="band__count">{{ members|length }} {{ 'человек' if members|length % 10 not in [2,3,4] or members|length % 100 in [12,13,14] else 'человека' }}</span>
+          <span class="band__sum">{{ members|map(attribute='paid')|map('first')|sum|money }}</span>{% endif %}
+      </div></th>
+    </tr>
+  {% endif %}
+  {% if live %}{% set ns.n = ns.n + 1 %}{% endif %}
+  <tr id="r{{ r.id }}" class="{{ 'is-gone' if not live }}">
+    <td class="fix fix--no num"><a href="/rows/{{ r.id }}" title="Открыть строку: комментарии, оплаты, записи, перенос">{{ ns.n if live else '—' }}</a></td>
+    {% for k, title, _ in cols if k in lead %}{% set c = r.cells[k] %}
+    <td class="{{ 'fix fix--name' if k == 'name' }}">
+      {% if k == 'inviter' and live %}<input class="cellin{{ ' is-warn' if c.warn }}" list="inv-list" data-pid="{{ r.id }}" data-v="{{ c.v }}" value="{{ c.v }}" placeholder="вписать" aria-label="Кто вовлёк: {{ r.name }}"{% if c.warn %} title="Так написали в Тильде. Впишите, кто на самом деле вовлёк"{% endif %}>
+      {% else %}<div class="cell"{% if live %} contenteditable="plaintext-only" data-pid="{{ r.id }}" data-key="{{ k }}" data-v="{{ c.v }}" aria-label="{{ title }}: {{ r.name }}"{% endif %}>{{ c.v|replace('\n', ' ') }}</div>{% endif %}
+    </td>
+    {% endfor %}
+    <td class="num">{% if r.paid[1] %}<span class="paid">{{ r.paid[0]|money }}</span>{% if r.paid[1] > 1 %}<span class="paid__n" title="Платежей">×{{ r.paid[1] }}</span>{% endif %}{% endif %}</td>
+    <td>{% if live %}<button type="button" class="tagcell" data-pid="{{ r.id }}" data-tags="{{ r.tags|join(', ') }}" aria-label="Теги: {{ r.name }}">{% for t in r.tags %}<span class="tagchip">{{ t }}</span>{% endfor %}</button>
+      {% else %}{% for t in r.tags %}<span class="tagchip">{{ t }}</span>{% endfor %}{% endif %}</td>
+    {% for k, title, _ in cols if k not in lead %}{% set c = r.cells[k] %}
+    <td><div class="cell{{ ' is-auto' if c.auto }}"{% if live %} contenteditable="plaintext-only" data-pid="{{ r.id }}" data-key="{{ k }}" data-v="{{ '' if c.auto else c.v }}" aria-label="{{ title }}: {{ r.name }}"{% endif %}{% if c.auto %} title="Из разбора, подтверждено в карточке. Впишите своё, и оно заменит"{% endif %}>{{ c.v|replace('\n', ' ') }}</div></td>
+    {% endfor %}
+    <td class="state-cell">{% if r.moved_to %}в {{ r.moved_to }}{% elif r.status != 'в потоке' %}{{ r.status }}{% else %}{{ r.review or '' }}{% if r.proposed %} <a href="/participants/{{ r.card }}?tab=info" title="Сведения из записи ждут подтверждения">+{{ r.proposed }}</a>{% endif %}{% endif %}</td>
+    <td class="num">{% if r.notes %}<a href="/rows/{{ r.id }}#notes">{{ r.notes }}</a>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td class="grid__empty" colspan="{{ ncols }}">{% if q or tag %}Ничего не нашлось. <a href="/rows?flow={{ f.id }}">Показать все строки</a>{% else %}Строк пока нет. Они появятся с первой оплатой в {{ f.name }}, или нажмите «Добавить строку».{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<datalist id="inv-list">{% for n in inviter_names %}<option value="{{ n }}">{% endfor %}</datalist>
+<p class="sheetsave" id="rowsave" aria-live="polite"></p>
+
+<script>
+document.addEventListener("click", e => { const b = e.target.closest("button[data-confirm]"); if (b && !confirm(b.dataset.confirm)) e.preventDefault(); });
+(() => {
+  const say = (t, bad) => { const el = document.getElementById("rowsave"); el.textContent = t; el.classList.toggle("is-bad", !!bad); el.classList.add("is-on");
+    clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove("is-on"), bad ? 6000 : 1800); };
+  const post = (url, data) => { const b = new FormData(); for (const k in data) b.append(k, data[k]);
+    return fetch(url, { method: "POST", body: b, credentials: "same-origin" }).then(r => r.json()); };
+
+  const addBtn = document.getElementById("addrow-btn"), addForm = document.getElementById("addrow");
+  addBtn.addEventListener("click", () => { const open = addForm.hidden; addForm.hidden = !open; addBtn.setAttribute("aria-expanded", open);
+    if (open) addForm.querySelector("input").focus(); });
+
+  document.querySelectorAll(".cell[contenteditable]").forEach(el => {
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.blur(); }
+      if (e.key === "Escape") { el.textContent = el.dataset.v; el.blur(); }
+    });
+    el.addEventListener("focus", () => { if (el.classList.contains("is-auto")) el.textContent = ""; });
+    el.addEventListener("blur", () => {
+      const v = el.textContent.trim();
+      if (v === el.dataset.v) { if (el.classList.contains("is-auto") && !v) location.reload(); return; }
+      el.classList.add("is-saving");
+      post(`/rows/${el.dataset.pid}/cell`, { key: el.dataset.key, value: v }).then(r => {
+        el.classList.remove("is-saving");
+        if (!r.ok) { say(r.err || "Не сохранилось", true); el.textContent = el.dataset.v; return; }
+        el.dataset.v = r.value; el.textContent = r.value; el.classList.remove("is-auto");
+        el.classList.add("is-saved"); setTimeout(() => el.classList.remove("is-saved"), 900); say("Сохранено");
+      }).catch(() => { el.classList.remove("is-saving"); say("Нет связи, не сохранилось", true); el.textContent = el.dataset.v; });
+    });
+  });
+
+  // «Кто вовлёк»: после сохранения страница перерисуется, и строка встанет в группу этого человека
+  document.querySelectorAll(".cellin").forEach(el => {
+    const save = () => {
+      const v = el.value.trim(); if (v === el.dataset.v) return;
+      el.dataset.v = v; say("Сохраняю…");
+      post(`/rows/${el.dataset.pid}/cell`, { key: "inviter", value: v }).then(r => {
+        if (!r.ok) { say(r.err || "Не сохранилось", true); return; }
+        location.hash = "r" + el.dataset.pid; location.reload();
+      }).catch(() => say("Нет связи, не сохранилось", true));
+    };
+    el.addEventListener("change", save);
+    el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") { el.value = el.dataset.v; el.blur(); } });
+  });
+
+  document.querySelectorAll(".tagcell").forEach(btn => btn.addEventListener("click", () => {
+    const v = prompt("Теги через запятую, например: ждём доплату, VIP", btn.dataset.tags);
+    if (v === null) return;
+    post(`/rows/${btn.dataset.pid}/tags`, { tags: v, back: "json" }).then(r => {
+      btn.dataset.tags = r.tags.join(", "); btn.textContent = "";
+      r.tags.forEach(t => { const s = document.createElement("span"); s.className = "tagchip"; s.textContent = t; btn.append(s); });
+      say("Теги сохранены");
+    });
+  }));
+
+  const hit = location.hash && document.querySelector(location.hash);
+  if (hit && hit.tagName === "TR") { hit.classList.add("is-hit"); hit.scrollIntoView({ block: "center" }); }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+# Развёртывание помощника. Запуск с этого каталога:
+#     ./deploy.sh up
+#
+# Все службы поднимаются из одного образа и различаются только ролью.
+# Пока настройка не пройдена, работает лишь web — остальные ждут и
+# поднимутся сами, как только мастер запишет настройки.
+
+name: vershina
+
+x-common: &common
+  build:
+    # Контекст — каталог work целиком: в образ едут оба проекта.
+    # Лишнее отсекается в work/.dockerignore (там же 9,7 ГБ данных чатов).
+    context: ../..
+    dockerfile: vershina-app/deploy/Dockerfile
+  image: vershina-assistant:latest
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    # Имя, которым помощник зовёт хозяина в своих инструкциях.
+    VERSHINA_OWNER: ${VERSHINA_OWNER:-хозяина}
+    # Ключи приложения телеграма — нужны, чтобы войти в аккаунт из мастера.
+    TG_API_ID: ${TG_API_ID:?не задан TG_API_ID, см. env.example}
+    TG_API_HASH: ${TG_API_HASH:?не задан TG_API_HASH, см. env.example}
+  volumes:
+    # Вход в Claude Code живёт здесь. Без этого тома он теряется
+    # при каждом перезапуске, и помощник замолкает.
+    - home:/data/home
+    - app:/data/app
+    - kb:/data/kb
+    - jarvis:/data/jarvis
+    - backups:/data/backups
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      VERSHINA_DOMAIN: ${VERSHINA_DOMAIN:?не задан домен, см. env.example}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  # Веб-приложение и мастер настройки. Работает всегда: с него всё начинается.
+  web:
+    <<: *common
+    command: ["web"]
+    expose:
+      - "8000"
+
+  bot:
+    <<: *common
+    command: ["bot"]
+    depends_on:
+      - web
+
+  # Ночной прогон выгрузки и резервные копии.
+  cron:
+    <<: *common
+    command: ["cron"]
+    depends_on:
+      - web
+
+volumes:
+  home:
+  app:
+  kb:
+  jarvis:
+  backups:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Посты · Вершина{% endblock %}
+{% block body %}
+<div class="tghead">
+  <h1><span class="brace">{</span>Посты<span class="brace">}</span></h1>
+  {% if flows_live | length > 1 %}
+  <form method="get" action="/posts"><select name="flow" onchange="this.form.submit()" aria-label="Поток">
+    {% for x in flows_live %}<option value="{{ x.id }}" {{ 'selected' if f and x.id == f.id }}>{{ x.name }}</option>{% endfor %}
+  </select></form>
+  {% elif f %}<span class="pill">{{ f.name }}</span>{% endif %}
+  <span class="tag">{% if tg.connected %}пишет аккаунт {{ tg.name }}{% else %}аккаунт сообщества не подключён{% endif %}</span>
+  {% if send_mode == 'test' %}<span class="tglock" title="Переключает администратор: «Управление» → «Телеграм»">🔒 отправка открыта только в чат «Бот»{% if sel and not send_on %} — сюда можно только черновики{% endif %}</span>
+  {% elif not send_on %}<span class="tglock" title="Включает администратор: «Управление» → «Телеграм»">🔒 отправка выключена — можно писать черновики</span>{% endif %}
+</div>
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+
+{% if not f %}
+<div class="surface"><p style="margin:0">Нет идущих потоков.</p></div>
+{% elif not groups %}
+<div class="surface"><p style="margin:0">У потока {{ f.name }} не выбраны чаты: «Управление» → «Потоки» → {{ f.name }} → «Чаты потока».</p></div>
+{% else %}
+<div class="tg">
+  <!-- список чатов потока по ролям -->
+  <nav class="tg__list" aria-label="Чаты потока">
+    {% for g in groups %}
+    <div class="tg__group">{{ g.title }}</div>
+    {% for c in g.chats %}
+    {% set on = sel and c.chat_id == sel.chat_id and c.topic_id == sel.topic_id %}
+    <a class="tgchat{{ ' is-on' if on }}" href="/posts?flow={{ f.id }}&chat={{ c.chat_id }}&topic={{ c.topic_id }}">
+      <span class="tgchat__title">{{ c.title }}{% set nd = drafts | selectattr('chat_id', 'equalto', c.chat_id) | list | length %}{% if nd %} <span class="pill pill--accent">{{ nd }}</span>{% endif %}</span>
+      <span class="tgchat__time">{{ c.last_at.strftime('%H:%M') if c.last_at and c.last_at.date() == c.last_at.now(c.last_at.tzinfo).date() else (c.last_at.strftime('%d.%m') if c.last_at else '') }}</span>
+      <span class="tgchat__last">{% if c.last_who %}{{ c.last_who.split()[0] }}: {% endif %}{{ c.last_text }}</span>
+    </a>
+    {% endfor %}
+    {% endfor %}
+  </nav>
+
+  <!-- переписка и поле ввода -->
+  <section class="tg__chat">
+    {% if sel %}
+    <header class="tg__chathead">
+      <b>{{ sel.title }}</b>
+      <button type="button" class="quiet" id="tgRefresh" data-chat="{{ sel.chat_id }}" data-topic="{{ sel.topic_id }}">Обновить</button>
+    </header>
+    <div class="tg__msgs" id="tgMsgs" data-chat="{{ sel.chat_id }}" data-topic="{{ sel.topic_id }}">
+      <div id="tgFeed">{% with chat = sel.chat_id %}{% include "_chat_messages.html" %}{% endwith %}</div>
+      {% for d in here %}
+      <article class="tgdraft" id="post-{{ d.id }}">
+        <div class="tgdraft__head"><b>Черновик</b> · {{ kinds.get(d.kind, d.kind) }} · @{{ d.created_by }}
+          {% if d.reply_to %} · ответ на сообщение{% endif %}{% if d.note %}<span class="tag"> · {{ d.note }}</span>{% endif %}</div>
+        {% if d.files %}<div class="tgdraft__media">{% for fn in d.files %}
+          <figure><img src="/post_media/{{ d.id }}/{{ fn }}" alt=""><form method="post" action="/posts/{{ d.id }}/media">
+            <input type="hidden" name="drop" value="{{ fn }}"><button class="quiet" title="Убрать картинку">×</button></form></figure>{% endfor %}</div>{% endif %}
+        {% if d.html %}<div class="tgmsg__text">{{ d.html | safe }}</div>{% endif %}
+        <details class="tgdraft__edit"><summary>Править</summary>
+          <form method="post" action="/posts/{{ d.id }}" class="post__form">
+            <textarea name="text" rows="6">{{ d.text }}</textarea>
+            <input type="hidden" name="chat" value="{{ d.chat_id }}:{{ d.topic_id or 0 }}">
+            <button name="action" value="save" class="quiet">Сохранить</button>
+          </form>
+          <form method="post" action="/posts/{{ d.id }}/media" enctype="multipart/form-data" class="tgdraft__add">
+            <label class="quiet">📷 Добавить картинки<input type="file" name="files" accept="image/*" multiple hidden onchange="this.form.submit()"></label>
+            <select name="avatar_card" onchange="this.form.submit()"><option value="">🖼 фото из аватарки участника…</option>
+              {% for p in people %}<option value="{{ p.card }}">{{ p.name }}</option>{% endfor %}</select>
+          </form>
+        </details>
+        <form method="post" action="/posts/{{ d.id }}" class="tgdraft__act">
+          <input type="hidden" name="text" value="{{ d.text }}"><input type="hidden" name="chat" value="{{ d.chat_id }}:{{ d.topic_id or 0 }}">
+          <button name="action" value="delete" class="quiet" data-confirm="Удалить черновик?">Удалить</button>
+          <button name="action" value="send" {{ 'disabled' if not send_on }} title="{{ '' if send_on else 'Отправка выключена' }}"
+                  data-confirm="Отправить в «{{ sel.title }}»? Сообщение сразу увидят все в чате.">Отправить</button>
+        </form>
+      </article>
+      {% endfor %}
+    </div>
+
+    <form class="tg__composer" method="post" action="/posts/draft" enctype="multipart/form-data" id="tgComposer">
+      <input type="hidden" name="flow" value="{{ f.id }}"><input type="hidden" name="chat" value="{{ sel.chat_id }}">
+      <input type="hidden" name="topic" value="{{ sel.topic_id }}"><input type="hidden" name="reply_to" id="tgReplyTo">
+      <div class="tg__replying" id="tgReplying" hidden>Ответ на сообщение <b id="tgReplyWho"></b> <button type="button" class="quiet" id="tgReplyCancel">×</button></div>
+      <div class="tg__files" id="tgFiles"></div>
+      <textarea name="text" id="tgText" rows="3" placeholder="Напишите сообщение. Фирменные буквы — [[ЛИДЕРБОРД]] или [[ДЕНЬ|зелёный]]"></textarea>
+      <div class="tg__tools">
+        <label class="quiet tgbtn" title="Приложить картинки (до 10 — альбомом)">📷<input type="file" name="files" id="tgFileInput" accept="image/*" multiple hidden></label>
+        <select name="avatar_card" title="Фото из аватарки участника — для поста о вовлечении">
+          <option value="">🖼 аватарка участника…</option>
+          {% for p in people %}<option value="{{ p.card }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <select id="tgGenKind" aria-label="Вид поста для Claude" {{ 'disabled' if not claude_on }}>
+          {% for k, label in gen_kinds.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
+        </select>
+        <button type="button" class="quiet" id="tgGen" data-flow="{{ f.id }}" {{ 'disabled' if not claude_on }}
+                title="{{ 'Claude напишет пост по фактам платформы в стиле примеров. Текст в поле — пожелание: о ком, о чём' if claude_on else 'Claude не подключён: войдите на странице Стенографа' }}">✨ Сгенерировать</button>
+        <span class="tg__spacer"></span>
+        <button type="submit">Сохранить черновик</button>
+      </div>
+      <p class="tag" style="margin:0">Сообщение сохраняется черновиком внизу чата; в телеграм оно уходит только кнопкой «Отправить»{% if not send_on %} — сейчас отправка выключена{% endif %}.</p>
+    </form>
+    {% else %}
+    <div class="tgempty">Выберите чат слева</div>
+    {% endif %}
+  </section>
+
+  <!-- факты и примеры -->
+  <aside class="tg__side">
+    {% if facts %}
+    <div class="tgside__block">
+      <b>Вовлечения {{ f.name }}</b>
+      <p>{{ facts.board.done }}{% if facts.board.goal %} из {{ facts.board.goal }}{% endif %} · +{{ facts.board.week }} за неделю</p>
+      <ul>{% for t in facts.board.teams %}<li>{{ t.title }}: {{ t.done }}{% if t.goal %} из {{ t.goal }}{% endif %}</li>{% endfor %}</ul>
+    </div>
+    {% if facts.reports %}
+    <div class="tgside__block">
+      <b>Отчёты за {{ facts.reports.day.strftime('%d.%m') }}</b>
+      <p>{{ facts.reports.done }} из {{ facts.reports.total }}{% if facts.reports.missing %} · нет: {{ facts.reports.missing | join(', ') }}{% endif %}</p>
+    </div>
+    {% endif %}
+    {% endif %}
+    <details class="tgside__block" id="examples">
+      <summary><b>Примеры для ИИ</b> <span class="tag">{{ examples | length }}</span></summary>
+      {% for e in examples %}
+      <div class="example">
+        <p class="tag" style="margin:0">{{ e.kind }} · {{ e.at[:10] }}</p>
+        <div class="tgmsg__text">{{ e.html | safe }}</div>
+        <form method="post" action="/posts/examples/{{ e.id }}/remove"><input type="hidden" name="flow" value="{{ f.id }}">
+          <button class="quiet" data-confirm="Убрать пример? ИИ перестанет на него опираться.">Убрать</button></form>
+      </div>
+      {% endfor %}
+    </details>
+  </aside>
+</div>
+{% endif %}
+<script src="/static/posts.js?v={{ v }}" defer></script>
+<script src="/static/chats.js?v={{ v }}" defer></script>
+{% endblock %}

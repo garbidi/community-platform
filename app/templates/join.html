@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Заявка на поток · Вершина</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <link rel="icon" href="/static/logo-navy.svg">
+  <meta name="robots" content="noindex">
+</head>
+<body>
+<div class="poster">
+  <div class="poster__brand">
+    <img src="/static/logo-cream.svg" alt="vershina.community">
+    <p class="poster__claim">{% if f %}Мастермайнд «Вершина» · поток {{ f.name }}{% else %}Мастермайнд «Вершина»{% endif %}</p>
+    <p class="poster__note">Платформа потока: ваша декларация, цели и шаги, вовлечения и отчёты — в одном месте.</p>
+  </div>
+  <div class="poster__form">
+    {% if error %}
+      <h1>Ссылка не работает</h1>
+      <p class="alarm">{{ error }}</p>
+
+    {% elif step == 'sent' %}
+      <h1>{{ 'Заявка отправлена' if req.status == 'ждёт' else ('Доступ открыт' if req.status == 'принята' else 'Заявка отклонена') }}</h1>
+      {% if req.status == 'ждёт' %}
+      <p>Спасибо, {{ req.first_name or 'участник' }}! Ассистент проверит заявку и откроет доступ — тогда входите на платформу
+        кнопкой «Войти через Telegram».</p>
+      {% if saved %}<p class="state">Сохранено.</p>{% endif %}
+      <form method="post" action="/join/{{ token }}/sent" enctype="multipart/form-data">
+        <input type="hidden" name="r" value="{{ req.id }}"><input type="hidden" name="s" value="{{ req.secret }}">
+        <label>Фамилия и имя — как в договоре
+          <input name="full_name" value="{{ req.full_name or '' }}" autocomplete="name" required></label>
+        <label>Телефон, с которого оплачивали
+          <input name="phone" value="{{ req.phone or '' }}" inputmode="tel" autocomplete="tel" placeholder="+7 900 123-45-67"></label>
+        <label>Ваше фото — по нему вас узнают в сообществе
+          <input name="photo" type="file" accept="image/*"></label>
+        <button type="submit">Сохранить</button>
+      </form>
+      <p class="trouble">По телефону мы найдём вас в списке участников — тогда доступ откроется сразу.</p>
+      {% elif req.status == 'принята' %}
+      <p>Ассистент открыл вам доступ. Входите — платформа узнает вас по телеграму, пароль не нужен.</p>
+      {% if tg_bot %}<div class="tglogin">
+        <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ tg_bot }}"
+                data-size="large" data-radius="8" data-auth-url="/login/tg"></script>
+      </div>{% else %}<p><a href="/login">Войти на платформу</a></p>{% endif %}
+      {% else %}
+      <p>Если это ошибка — напишите вашему менеджеру.</p>
+      {% endif %}
+
+    {% else %}
+      <h1>{% if person %}Приглашение для {{ person.name }}{% else %}Заявка на поток{% endif %}</h1>
+      <p>{% if person %}Нажмите кнопку — платформа узнает вас по телеграму, и вы сразу попадёте в свою карточку.
+        {% else %}Нажмите кнопку — телеграм подтвердит, кто вы. После этого ассистент откроет вам доступ.{% endif %}</p>
+      {% if tg_bot %}
+      <div class="tglogin">
+        <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ tg_bot }}"
+                data-size="large" data-radius="8" data-auth-url="/join/{{ token }}/tg"></script>
+      </div>
+      <p class="trouble">Мы получим только ваше имя, @ник и фото из телеграма. Писать вам от имени платформы никто не будет.</p>
+      {% else %}
+      <p class="alarm">Вход через Telegram ещё не настроен — сообщите менеджеру.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,111 @@
+/* Токены дизайн-системы «Вершина». Источник правды — design.md в корне проекта.
+   Всякий цвет, шрифт, отступ и длительность в style.css берётся отсюда по имени. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Цвет. Якорный тон — брендовый синий 275°, кремовые нейтрали тёплые (89°). */
+  --color-paper:       oklch(96.4% 0.018 89);
+  --color-paper-2:     oklch(93.4% 0.024 88);
+  --color-panel:       oklch(98.8% 0.010 89);
+  --color-rule:        oklch(87.0% 0.020 86);
+  --color-rule-soft:   oklch(91.5% 0.016 86);
+  --color-neutral:     oklch(58.0% 0.030 276);
+  --color-muted:       oklch(45.0% 0.045 276);
+  --color-ink:         oklch(23.0% 0.088 275);
+  --color-navy:        oklch(34.1% 0.115 276);
+  --color-navy-deep:   oklch(19.0% 0.075 275);
+  --color-navy-line:   oklch(44.0% 0.100 276);
+  --color-navy-hover:  oklch(39.0% 0.110 276);
+  --color-rail-ink:    oklch(83.0% 0.022 89);
+  --color-rail-ink-on: oklch(98.0% 0.012 89);
+  --color-rail-hover:  oklch(39.0% 0.105 276);
+  --color-rail-active: oklch(43.0% 0.105 276);
+  --color-action:      oklch(34.1% 0.115 276);
+  --color-action-ink:  oklch(98.8% 0.010 89);
+  --color-action-over: oklch(23.0% 0.088 275);
+  --color-accent:      oklch(63.3% 0.200 37);
+  --color-accent-soft: oklch(88.0% 0.060 55);
+  --color-accent-ink:  oklch(98.8% 0.010 89);
+  --color-focus:       oklch(63.3% 0.200 37);
+  --color-dot:         oklch(40.0% 0.100 276);
+  --color-warn:        oklch(62.0% 0.130 70);
+  --color-warn-soft:   oklch(91.0% 0.050 78);
+
+  /* Шрифты: дисплей + текст, два семейства. */
+  --font-display: "Unbounded", "Trebuchet MS", sans-serif;
+  --font-body: "Onest", -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Шкала кегля 1.25 от 0.875rem. */
+  --text-3xs: 0.6875rem;
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.875rem;
+  --text-display: clamp(1.75rem, 1.2rem + 1.6vw, 2.6rem);
+  --text-figure: clamp(1.6rem, 1.1rem + 1.4vw, 2.25rem);
+
+  /* Шаг 4pt. */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  --rule-hair: 1px;
+  --radius-surface: 6px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  --control-h: 2.25rem;
+  --control-h-touch: 2.75rem;
+  --rail-width: 15rem;
+  --measure: 68ch;
+  --measure-long: 72ch;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-instant: 90ms;
+  --dur-short: 160ms;
+  --dur-medium: 220ms;
+}
+
+/* Тёмная тема: бумагой становится тёмно-синий, тон не меняется —
+   двигаются только светлота и насыщенность. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper:       oklch(17.0% 0.055 275);
+    --color-paper-2:     oklch(21.0% 0.060 275);
+    --color-panel:       oklch(22.5% 0.055 275);
+    --color-rule:        oklch(33.0% 0.045 275);
+    --color-rule-soft:   oklch(28.0% 0.045 275);
+    --color-neutral:     oklch(68.0% 0.030 280);
+    --color-muted:       oklch(78.0% 0.025 280);
+    --color-ink:         oklch(94.0% 0.015 89);
+    --color-navy:        oklch(26.0% 0.070 275);
+    --color-navy-deep:   oklch(15.0% 0.055 275);
+    --color-navy-line:   oklch(40.0% 0.070 276);
+    --color-navy-hover:  oklch(31.0% 0.070 275);
+    --color-rail-ink:    oklch(80.0% 0.020 89);
+    --color-rail-ink-on: oklch(97.0% 0.012 89);
+    --color-rail-hover:  oklch(31.0% 0.070 275);
+    --color-rail-active: oklch(35.0% 0.075 275);
+    --color-action:      oklch(46.0% 0.105 276);
+    --color-action-ink:  oklch(97.0% 0.012 89);
+    --color-action-over: oklch(53.0% 0.110 276);
+    --color-accent:      oklch(72.0% 0.170 42);
+    --color-accent-soft: oklch(32.0% 0.080 45);
+    --color-accent-ink:  oklch(17.0% 0.055 275);
+    --color-focus:       oklch(74.0% 0.170 45);
+    --color-dot:         oklch(66.0% 0.080 276);
+    --color-warn:        oklch(78.0% 0.110 75);
+    --color-warn-soft:   oklch(30.0% 0.060 75);
+  }
+}

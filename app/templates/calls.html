@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Созвоны · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Созвоны<span class="brace">}</span></h1>
+  <p class="head__meta">Записи встреч «Вершины» из Стенографа: кто был, сколько говорил, расшифровка по ролям.
+    Личные встречи сюда не попадают{% if user.role == 'mentor' %} · вам видны встречи, где были ваши участники{% endif %}</p>
+</div>
+
+<nav class="tabs" aria-label="Потоки">
+  {% for t in tabs %}<a href="/calls?flow={{ t.key | urlencode }}" class="{{ 'is-on' if want == t.key }}">{{ t.title }}{% if t.current %} <span class="pill pill--accent">текущий</span>{% endif %} <span class="tag">{{ t.n }}</span></a>{% endfor %}
+  {% if tabs | length > 1 %}<a href="/calls?flow=*" class="{{ 'is-on' if want == '*' }}">Все <span class="tag">{{ total }}</span></a>{% endif %}
+</nav>
+
+<form class="filters" method="get" action="/calls">
+  <input type="hidden" name="flow" value="{{ want }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Встреча или участник" aria-label="Поиск">
+  <button class="quiet">Найти</button>
+  {% if q %}<a class="more" href="/calls?flow={{ want | urlencode }}">сбросить</a>{% endif %}
+</form>
+
+{% if items %}
+<ul class="calllist">
+  {% for c in items %}
+  <li class="surface callrow">
+    <div class="callrow__when">
+      <b>{{ c.when.strftime('%d.%m') if c.when else '—' }}</b>
+      <span class="tag">{{ c.when.strftime('%H:%M') if c.when else '' }}</span>
+    </div>
+    <div class="callrow__main">
+      <h3><a href="/calls/{{ c.id }}">{{ title_of(c) }}</a></h3>
+      <p class="tag">{{ (c.secs // 60) | int }} мин
+        {% if want == '*' %} · {{ c.flow or 'вне потоков' }}{% endif %}
+        {% if c.flow_how in ('по дате', 'по менторам') %} · <span title="Поток определён {{ c.flow_how }} — проверьте на странице встречи">поток {{ c.flow_how }}</span>{% endif %}
+        · {{ c.n_members }} {{ 'участник' if c.n_members % 10 == 1 and c.n_members % 100 != 11 else 'участника' if c.n_members % 10 in [2,3,4] and c.n_members % 100 not in [12,13,14] else 'участников' }}
+        {% if c.staff %} · команда: {{ c.staff | length }}{% endif %}
+        {% if c.n_unknown %} · не узнаны: {{ c.n_unknown }}{% endif %}
+        {% if c.summary %} · <span class="pill pill--accent">есть выжимка</span>{% endif %}</p>
+      <p class="callrow__who">
+        {% for p in c.people[:10] %}<span class="whochip whochip--{{ 'm' if p.kind == 'участник' else 's' if p.kind == 'команда' else 'u' }}">{{ p.name if p.kind else p.label }}</span>{% endfor %}
+        {% if c.people | length > 10 %}<span class="tag">и ещё {{ c.people | length - 10 }}</span>{% endif %}
+      </p>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% elif total %}
+<div class="surface"><p style="margin:0">Ничего не нашлось. <a href="/calls">Показать все</a></p></div>
+{% else %}
+<div class="surface"><p style="margin:0">Встреч пока нет. Они появляются здесь, когда бот Стенографа записал встречу
+  с меткой «Вершина» и расшифровал её.</p></div>
+{% endif %}
+{% endblock %}

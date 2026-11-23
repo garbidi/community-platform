@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Участники · Вершина{% endblock %}
+{% block body %}
+{% from "_ava.html" import ava %}
+<div class="head">
+  <h1><span class="brace">{</span>Участники<span class="brace">}</span></h1>
+  <p class="head__meta">{% if view == 'flow' %}Поток {{ flow_name }} — {{ 'декларации ведутся на платформе' if native_flow else 'по таблицам деклараций' }}{% if flow_status == 'завершён' %} · поток завершён, данные на момент финала{% endif %}{% else %}Закончившиеся потоки — по переписке в их чатах{% endif %}{% if hidden_note %} · {{ hidden_note }}{% endif %}</p>
+</div>
+
+<nav class="tabs" aria-label="Потоки">
+  {% for t in tabs %}
+  <a href="/participants?flow={{ t.name|urlencode }}" class="{{ 'is-on' if view == 'flow' and flow_name == t.name }}">{{ t.name }}{% if t.current %} <span class="pill pill--accent">текущий</span>{% elif t.status != 'идёт' %} <span class="pill">{{ t.status }}</span>{% endif %} <span class="tag">{{ t.count }}</span></a>
+  {% endfor %}
+  {% if archive_count %}<a href="/participants?view=archive" class="{{ 'is-on' if view == 'archive' }}">Архив: ММ5 и ММ6 <span class="tag">{{ archive_count }}</span></a>{% endif %}
+</nav>
+
+{% if view == 'flow' %}
+<form class="filters" method="get">
+  <input type="hidden" name="flow" value="{{ flow_name }}">
+  <input class="grow" name="q" value="{{ q }}" placeholder="Имя участника">
+  <select name="team">
+    <option value="">Все команды</option>
+    {% for t in teams %}<option value="{{ t }}" {{ 'selected' if team == t }}>{{ t.split('—')[0] }}</option>{% endfor %}
+  </select>
+  <select name="status">
+    <option value="">Любое состояние</option>
+    {% for s in ['в графике', 'отстаёт', 'выбыл', 'нет в таблицах'] %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+  </select>
+  <button type="submit">Показать</button>
+  {% if q or team or status %}<a class="reset" href="/participants?flow={{ flow_name|urlencode }}">Сбросить</a>{% endif %}
+</form>
+
+<p class="head__meta">{{ flow_people|length }} {{ 'человек' }} ·
+  «отстаёт» — 5 и больше просроченных шагов
+  {% if flow_sync %} · таблицы {{ 'обновлены' if flow_sync.ok else 'не обновились' }} {{ flow_sync.at|stamp }}{% if not flow_sync.ok %}: {{ flow_sync.message }}{% endif %}{% endif %}</p>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th>Команда</th><th class="num" title="Процент выполнения декларации — как в таблице команды">Декларация</th>
+    <th class="num" title="Сколько шагов сделано из всех, в процентах">Шаги сделаны</th>
+    <th class="num" title="Сколько целей закрыто из всех, в процентах">Цели закрыты</th>
+    <th class="num" title="Шаги, не сделанные в срок">Просрочено шагов</th>{% if show_money %}<th class="num">Деньги</th>{% endif %}
+    {% if rep.has_chat %}<th title="По чату отчётов: ✓ — сдал вчера; сколько дней из всех сдавал">Отчёты</th>{% endif %}<th>Состояние</th></tr></thead>
+  <tbody>
+  {% for r in flow_people %}
+  <tr>
+    <td><span class="who">{{ ava(r.card, r.name, r.card in photos) }}<a href="/participants/{{ r.card }}">{{ r.name }}</a></span></td>
+    <td title="{{ team_mentors.get(r.team_title, '') }}">{{ (r.team_title or '—').split('—')[0] }}</td>
+    <td class="num"><span class="minimeter"><span style="width:{{ ((r.progress or 0) * 100)|round(1) }}%"></span></span>{{ ((r.progress or 0) * 100)|round|int }}%</td>
+    <td class="num">{% if r.steps_total %}{{ ((r.steps_done or 0) * 100 / r.steps_total)|round|int }}%<span class="sub">{{ r.steps_done or 0 }} из {{ r.steps_total }}</span>{% else %}—{% endif %}</td>
+    <td class="num">{% if r.goals_total %}{{ ((r.goals_closed or 0) * 100 / r.goals_total)|round|int }}%<span class="sub">{{ r.goals_closed or 0 }} из {{ r.goals_total }}</span>{% else %}—{% endif %}</td>
+    <td class="num {{ 'delta--down' if r.late_steps >= 5 }}">{{ r.late_steps }}</td>
+{% if show_money %}<td class="num">{% if r.money_goal %}{{ r.money_fact|money if r.money_fact else '0 ₽' }}<span class="sub">из {{ r.money_goal|money }}</span>{% else %}—{% endif %}</td>{% endif %}
+    {% if rep.has_chat %}{% set st = rep.stats.get(r.card) %}
+    <td class="nowrap" title="{% if st %}сдал(а) отчёт {{ st.done }} из {{ st.of }} дней{% endif %}">{% if st %}{% if st.yesterday %}<span class="repmark">✓</span>{% else %}<span class="repmark repmark--miss">—</span>{% endif %}
+      <span class="tag{{ ' late' if st.miss >= 2 }}">{% if st.miss >= 2 %}нет {{ st.miss }} дн. подряд{% else %}{{ st.done }} из {{ st.of }}{% endif %}</span>
+      {% else %}<span class="tag">—</span>{% endif %}</td>
+    {% endif %}
+    <td><span class="state {{ 'state--lost' if r.state == 'выбыл' else 'state--quiet' if r.state == 'отстаёт' else 'state--done' if r.state == 'нет в таблицах' else '' }}">{{ r.state }}</span></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="9">{% if q or team or status %}Под этот фильтр никто не попал.{% else %}В потоке пока нет участников — они появятся, когда прочитаются таблицы команд{% if nav | selectattr("href", "equalto", "/flows") | list %} (<a href="/flows">«Потоки»</a>){% endif %}.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% else %}
+<p class="limit"><b>Потоки ММ5 и ММ6 завершены.</b> Переписка их чатов сохранена как история людей:
+  портреты, разборы, кто как говорил. Состояния «притих» и «выпал» после финала не считаются,
+  новые сообщения из этих чатов не собираются.{% if may_search %}
+  <a class="more" href="/search">Поиск по переписке ММ5 и ММ6</a>{% endif %}</p>
+
+<form class="filters" method="get">
+  <input type="hidden" name="view" value="archive">
+  <input class="grow" name="q" value="{{ q }}" placeholder="Имя участника">
+  <select name="chat">
+    <option value="">Оба чата</option>
+    {% for c in chats %}<option value="{{ c.id }}" {{ 'selected' if chat == c.id }}>{{ c.title }}</option>{% endfor %}
+  </select>
+  <button type="submit">Показать</button>
+  {% if q or chat %}<a class="reset" href="/participants?view=archive">Сбросить</a>{% endif %}
+</form>
+{% if no_usernames %}
+<p class="head__meta">Поиск идёт по имени: в выгрузке из Telegram Desktop username не передаются.</p>
+{% endif %}
+
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th class="num">Сообщений</th><th class="num">Слов</th>
+    <th class="num">Кружков</th><th class="num">Минут</th><th class="num">Слов в минуту</th>
+    <th class="num">Отвечает</th><th>В переписке</th><th>Материал</th><th>Портрет</th>
+    {% if mentors %}<th>Ментор</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for p in people %}
+  <tr>
+    <td><span class="who">{{ ava(p.user_id, p.name, p.user_id in photos) }}<a href="/participants/{{ p.user_id }}">{{ p.name }}</a></span>
+      {% if p.username %}<span class="sub">@{{ p.username }}</span>{% endif %}</td>
+    <td class="num">{{ p.messages|fmt }}</td>
+    <td class="num">{{ p.words|fmt }}</td>
+    <td class="num">{{ p.circles|fmt }}</td>
+    <td class="num">{{ p.audio_min }}</td>
+    <td class="num">{{ p.speech_rate or '—' }}</td>
+    <td class="num">{{ p.reply_share }}</td>
+    <td>{{ p.first_seen|d }} — {{ p.last_seen|d }}</td>
+    {% set lvl = material.get(p.user_id, 'мало') %}
+    <td><span class="state {{ 'state--quiet' if lvl == 'скудно' else 'state--lost' if lvl == 'мало' else '' }}">{{ lvl }}</span></td>
+    <td>{% if p.user_id in portraits %}<span class="state">собран</span>{% else %}<span class="tag">—</span>{% endif %}</td>
+    {% if mentors %}<td class="tag">{{ mentors.get(p.user_id, []) | join(', ') or '—' }}</td>{% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="11">Под этот фильтр никто не попал.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

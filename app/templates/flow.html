@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Поток · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Поток{% if f %} {{ f.flow }}{% endif %}<span class="brace">}</span></h1>
+  <p class="head__meta">Динамика текущего потока по таблицам деклараций{% if f and f.sync and f.sync.at %} · обновлено {{ f.sync.at|stamp }}{% endif %}{% if hidden_note %} · {{ hidden_note }}{% endif %}</p>
+</div>
+
+{% if all_flows|length > 1 %}
+<nav class="tabs" aria-label="Потоки">
+  {% for fl in all_flows %}
+  <a href="/flow?flow={{ fl.name|urlencode }}" class="{{ 'is-on' if (f and f.flow == fl.name) }}">{{ fl.name }}{% if fl.is_current %} <span class="pill pill--accent">текущий</span>{% elif fl.status != 'идёт' %} <span class="pill">{{ fl.status }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% if not f or not x %}
+<div class="surface"><p style="margin:0">{% if chosen %}В потоке «{{ chosen }}» пока нет участников из таблиц.{% else %}Текущий поток не выбран.{% endif %}
+  Потоки создаются и запускаются в разделе <a href="/flows">«Потоки»</a>.
+  Переписка закончившихся потоков — в <a href="/participants?view=archive">«Участниках», вкладка «Архив»</a>.</p></div>
+{% else %}
+
+<div class="figures">
+  <div><div class="figure__n">{{ ((f.totals.progress or 0) * 100)|round|int }}<small>%</small></div>
+    <div class="figure__k">среднее выполнение деклараций</div></div>
+  <div><div class="figure__n">{{ f.totals.steps_done }}<small> / {{ f.totals.steps_total }}</small></div>
+    <div class="figure__k">шагов сделано</div></div>
+  <div class="{{ 'figure--flag' if f.totals.late }}"><div class="figure__n">{{ f.totals.late }}</div>
+    <div class="figure__k">шагов просрочено</div></div>
+  <div><div class="figure__n figure__n--money">{{ f.totals.money_fact|money }}</div>
+    <div class="figure__k">из {{ f.totals.money_goal|money }} — {{ ((f.totals.money_fact / f.totals.money_goal * 100) if f.totals.money_goal else 0)|round|int }}% денежных целей</div></div>
+</div>
+
+<div class="section"><h2>Шаги по неделям</h2>
+  <p>Сколько шагов стояло на неделю по дедлайнам и сколько из них сделано. Текущая неделя выделена, будущие — бледнее</p></div>
+<div class="surface">
+  <div class="wbars" role="img" aria-label="Шаги по неделям: запланировано и сделано">
+    {% for w in x.weeks %}
+    <div class="wbar{{ ' wbar--now' if w.now }}{{ ' wbar--future' if w.future }}"
+         title="{{ w.label }}: запланировано {{ w.total }}, сделано {{ w.done }}{% if not w.future %}, хвост {{ w.open }}{% endif %}">
+      <div class="wbar__col" style="height:{{ (w.total / x.weeks_top * 100)|round(1) }}%">
+        <span class="wbar__done" style="height:{{ (w.done / w.total * 100 if w.total else 0)|round(1) }}%"></span>
+      </div>
+      <div class="wbar__n">{{ w.done }}/{{ w.total }}</div>
+      <div class="wbar__k">{{ w.label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="head__meta" style="margin:var(--space-xs) 0 0"><span class="key key--done"></span> сделано
+    <span class="key key--open"></span> не сделано. Старые недели с хвостом — это и есть просрочки.</p>
+</div>
+
+<div class="cols" style="margin-top:var(--space-md)">
+  <div class="surface">
+    <h2>Кто на какой глубине</h2>
+    <p class="head__meta" style="margin-top:0">Сколько участников выполнили декларацию на столько-то процентов.
+      Как в толще на «Обзоре»: чем ниже строка, тем глубже — тем больше выполнено</p>
+    {% for b in x.buckets %}
+    <div class="hrow{{ ' hrow--low' if b.lo < 40 and b.people }}">
+      <div class="hrow__k">{{ b.label }}</div>
+      <div class="hrow__bar"><span style="width:{{ (b.people|length / x.buckets_top * 100)|round(1) }}%"></span></div>
+      <div class="hrow__n" title="{{ b.people|length }} чел.">{{ b.people|length }}</div>
+    </div>
+    {% endfor %}
+    {% set low = x.buckets | selectattr('lo', 'lt', 40) | map(attribute='people') | sum(start=[]) %}
+    {% if low %}
+    <p class="hrow__note"><b>Ниже 40% — стоит поговорить:</b>
+      {% for p in low %}<a href="/participants/{{ p.card }}">{{ p.name }}</a> <span class="tag">{{ ((p.progress or 0) * 100)|round|int }}%</span>{{ ', ' if not loop.last }}{% endfor %}</p>
+    {% else %}
+    <p class="hrow__note hrow__note--ok">Ниже 40% никого нет.</p>
+    {% endif %}
+  </div>
+
+  <div class="surface">
+    <h2>Команды</h2>
+    <table>
+      <thead><tr><th>Команда</th><th class="num">Декл.</th><th class="num">Деньги</th><th class="num">Просроч.</th></tr></thead>
+      <tbody>
+      {% for t in f.teams %}
+      <tr><td>{{ t.title }}<span class="sub">{{ t.mentors | join(', ') }}</span></td>
+        <td class="num">{{ ((t.progress or 0) * 100)|round|int }}%</td>
+        <td class="num">{{ ((t.money_fact / t.money_goal * 100) if t.money_goal else 0)|round|int }}%<span class="sub">{{ t.money_fact|money }}</span></td>
+        <td class="num {{ 'delta--down' if t.late >= 20 }}">{{ t.late }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section"><h2>Деньги по декларациям</h2>
+  <p>Цель в деньгах и факт — по таблицам участников, от самых близких к цели</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th>Команда</th><th class="num">Факт</th><th class="num">Цель</th><th>Путь</th></tr></thead>
+  <tbody>
+  {% for p in x.money %}
+  <tr>
+    <td><a href="/participants/{{ p.card }}">{{ p.name }}</a></td>
+    <td class="tag">{{ (p.team_title or '—').split('—')[0] }}</td>
+    <td class="num">{{ p.money_fact|money if p.money_fact else '0 ₽' }}</td>
+    <td class="num">{{ p.money_goal|money }}</td>
+    <td style="min-width:9rem"><span class="minimeter" style="width:6rem"><span style="width:{{ ([p.share, 1]|min * 100)|round(1) }}%"></span></span>{{ (p.share * 100)|round|int }}%</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">Денежных целей в декларациях нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="section"><h2>Цели буксуют</h2><p>Что отметили менторы: с кем поговорить и кому из менторов помочь</p></div>
+{% if stuck %}
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th>Цель</th><th>Статус</th><th>Что происходит</th><th>Ментор</th><th>Отметил</th></tr></thead>
+  <tbody>
+  {% for g in stuck %}
+  <tr>
+    <td><a href="/participants/{{ g.tg_user_id }}#celi-potok">{{ g.name }}</a></td>
+    <td>{{ g.text }}</td>
+    <td><span class="state {{ 'state--lost' if g.status == 'выпал' else 'state--quiet' }}">{{ g.status }}</span></td>
+    <td class="tag">{{ g.note or '' }}</td>
+    <td class="tag">{{ g.mentors or '—' }}</td>
+    <td class="tag">{{ g.updated_by }} · {{ g.updated_at|stamp }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="surface"><p style="margin:0">Буксующих целей нет. Менторы отмечают статус целей в карточке участника.</p></div>
+{% endif %}
+
+<p class="limit">Потоки ММ5 и ММ6 завершены — их переписка в <a href="/participants?view=archive">«Участниках», вкладка «Архив»</a>.</p>
+{% endif %}
+{% endblock %}

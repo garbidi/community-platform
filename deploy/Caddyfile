@@ -1,0 +1,26 @@
+# Обратный прокси с автоматическим сертификатом Let's Encrypt.
+# TLS здесь не для галочки: в мастере Глеб вводит код из телеграма
+# и пароль двухфакторной защиты — по http такое отправлять нельзя.
+
+{$VERSHINA_DOMAIN} {
+	encode zstd gzip
+
+	# Мастер и приложение — одно приложение, отдаём целиком.
+	reverse_proxy web:8000
+
+	# Заголовки, которые ничего не стоят, но убирают целый класс неприятностей.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

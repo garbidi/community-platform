@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Посты · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Посты<span class="brace">}</span></h1>
+  <p class="head__meta">Посты в чаты потока от аккаунта сообщества. Черновик собирается из таблиц потока,
+    вы правите его и отправляете сами — без кнопки ничего не уходит</p>
+</div>
+
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+
+{% if not f %}
+<div class="surface"><p style="margin:0">Нет идущих потоков. <a href="/flows">Создать поток</a></p></div>
+{% else %}
+
+{% if flows_live | length > 1 %}
+<nav class="tabs" aria-label="Потоки">
+  {% for x in flows_live %}<a href="/posts?flow={{ x.id }}" class="{{ 'is-on' if x.id == f.id }}">{{ x.name }}</a>{% endfor %}
+</nav>
+{% endif %}
+
+{% if not tg.connected %}
+<p class="alarm">Аккаунт сообщества не подключён — черновики собирать можно, отправлять нельзя.
+  Подключите его в <a href="/flows/{{ f.id }}#chats">«Потоки» → {{ f.name }} → «Чаты потока»</a>.</p>
+{% elif not chats %}
+<p class="alarm">У потока {{ f.name }} нет чатов для постов. Задайте чатам роли в
+  <a href="/flows/{{ f.id }}#chats">«Потоки» → {{ f.name }} → «Чаты потока»</a>.</p>
+{% else %}
+<p class="head__meta">Пишет аккаунт <b>{{ tg.name }}</b>{% if tg.username %} (@{{ tg.username }}){% endif %} ·
+  в чаты {{ f.name }}: {% for c in chats %}{{ c.title }}{% if c.topic_title %} › {{ c.topic_title }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</p>
+{% endif %}
+
+<form class="surface postnew" method="post" action="/posts/new">
+  <input type="hidden" name="flow" value="{{ f.id }}">
+  <span><b>Новый пост</b></span>
+  {% for k, title in kinds.items() %}
+  <button type="submit" name="kind" value="{{ k }}" class="{{ 'quiet' if k == 'свободный' }}">{{ title }}</button>
+  {% endfor %}
+</form>
+
+<div class="postlist" data-writing="{{ 1 if writing else 0 }}">
+{% for p in items %}
+  <article class="surface post post--{{ 'sent' if p.status == 'отправлен' else 'gone' if p.status == 'снят' else 'draft' }}" id="post-{{ p.id }}">
+    <header class="post__head">
+      <b>{{ kinds.get(p.kind, p.kind) }}</b>
+      <span class="pill{{ ' pill--accent' if p.status == 'отправлен' }}">{{ p.status }}</span>
+      <span class="tag">
+        {% if p.status == 'отправлен' %}{{ p.sent_at | stamp }} · @{{ p.sent_by }} → «{{ p.chat_title }}»
+        {% else %}{{ (p.updated_at or p.created_at) | stamp }} · @{{ p.created_by }}{% endif %}
+      </span>
+    </header>
+    {% if p.note %}<p class="post__note">{{ p.note }}</p>{% endif %}
+
+    {% if p.status == 'черновик' %}
+    <form method="post" action="/posts/{{ p.id }}" class="post__form">
+      <textarea name="text" rows="{{ [[(p.text or '').count('\n') + 3, 6] | max, 22] | min }}" maxlength="4000"
+                placeholder="Текст поста">{{ p.text }}</textarea>
+      {% if '[[' in (p.text or '') or 'tgemoji' in p.html %}<div class="post__preview"><span class="tag">Так увидят в телеграме:</span><p class="post__text">{{ p.html | safe }}</p></div>{% endif %}
+      <div class="post__bar">
+        <select name="chat" aria-label="Чат">
+          {% for c in chats %}<option value="{{ c.chat_id }}:{{ c.topic_id }}" {{ 'selected' if c.chat_id == p.chat_id and c.topic_id == p.topic_id }}>{{ c.title }}{% if c.topic_title %} › {{ c.topic_title }}{% endif %} · {{ 'участники' if c.kind in ('поток', 'команда') else c.kind }}{% if c.team_title %}, {{ c.team_title.split('—')[0].strip() }}{% endif %}</option>{% endfor %}
+          {% if not chats %}<option value="">нет чатов потока</option>{% endif %}
+        </select>
+        <span class="tag post__count"></span>
+        <span class="post__spacer"></span>
+        <button type="submit" name="action" value="save" class="quiet">Сохранить</button>
+        <button type="submit" name="action" value="claude" class="quiet" title="Переписать живым языком — факты остаются из заготовки">Переписать с Claude</button>
+        <button type="submit" name="action" value="delete" class="quiet" formnovalidate
+                data-confirm="Удалить черновик?">Удалить</button>
+        <button type="submit" name="action" value="send" {{ 'disabled' if not tg.connected or not chats }}
+                data-confirm="Отправить пост в выбранный чат? Его сразу увидят все участники чата.">Отправить</button>
+      </div>
+    </form>
+    {% elif p.status == 'пишется' %}
+    <p class="post__text post__text--busy">{{ p.html | safe }}</p>
+    <p class="tag">Claude переписывает пост… Страница обновится сама.</p>
+    {% else %}
+    <p class="post__text">{{ p.html | safe }}</p>
+    {% if p.status == 'отправлен' %}
+    <form method="post" action="/posts/{{ p.id }}">
+      <button type="submit" name="action" value="unsend" class="quiet"
+              data-confirm="Удалить пост из чата у всех участников?">Удалить из чата</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </article>
+{% else %}
+  <div class="surface"><p style="margin:0">Постов пока нет. Начните с «Вовлечённые за неделю» — черновик соберётся из таблиц {{ f.name }}.</p></div>
+{% endfor %}
+</div>
+{% endif %}
+
+<div class="section" id="examples"><h2>Примеры для ИИ</h2>
+  <p>Удачные сообщения организаторов из чатов. Посты пишет ИИ по фактам платформы, а эти примеры задают ему тон,
+    длину, эмодзи и что принято упоминать — копировать их он не будет. Неподходящий пример можно убрать.
+    Фирменные буквы в тексте поста пишутся так: <code>[[ЛИДЕРБОРД]]</code>; значки 📌 ✔️ ❤️ и цифры сами станут премиум-версиями</p></div>
+{% if examples %}
+{% for k in ex_kinds %}
+<details class="surface exkind">
+  <summary><b>{{ k | capitalize }}</b> <span class="tag">{{ examples | selectattr('kind', 'equalto', k) | list | length }}</span></summary>
+  {% for e in examples if e.kind == k %}
+  <div class="example">
+    <p class="tag" style="margin:0">{{ e.author }} · {{ e.at[:10] }}{% if e.chat_id and (e.chat_id|string).startswith('-100') %} ·
+      <a href="https://t.me/c/{{ (e.chat_id|string)[4:] }}/{{ e.msg_id }}" target="_blank" rel="noopener">оригинал</a>{% endif %}</p>
+    <p class="post__text">{{ e.html | safe }}</p>
+    <form method="post" action="/posts/examples/{{ e.id }}/remove"><input type="hidden" name="flow" value="{{ f.id if f else '' }}">
+      <button class="quiet" data-confirm="Убрать пример? ИИ перестанет на него опираться.">Убрать</button></form>
+  </div>
+  {% endfor %}
+</details>
+{% endfor %}
+{% else %}
+<div class="surface"><p style="margin:0">Примеров пока нет.</p></div>
+{% endif %}
+<script src="/static/posts.js?v={{ v }}" defer></script>
+{% endblock %}

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Зал ММ8 · Вершина</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+  :root {
+    --bg: oklch(17% 0.055 275); --bg-2: oklch(21% 0.06 275); --ink: oklch(96% 0.018 89);
+    --muted: oklch(75% 0.03 276); --line: oklch(36% 0.06 276); --accent: oklch(66% 0.19 40);
+    --seat: oklch(28% 0.05 276); --gold: oklch(82% 0.12 80); --ease: cubic-bezier(.2, .9, .3, 1.25);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 Onest, system-ui, sans-serif; }
+  body { min-height: 100vh; background: radial-gradient(120% 70% at 50% 100%, oklch(26% 0.09 276) 0%, var(--bg) 60%); overflow-x: hidden; }
+  header { max-width: 1100px; margin: 0 auto; padding: 28px 16px 4px; text-align: center; }
+  .kicker { margin: 0; letter-spacing: .18em; text-transform: uppercase; font-size: 12px; color: var(--muted); }
+  .kicker--brand { text-transform: none; letter-spacing: .12em; font-size: 14px; }   /* маленькими буквами (Марья 29.10) */
+  h1 { font: 700 clamp(28px, 6vw, 52px)/1.05 Unbounded, sans-serif; margin: 8px 0 10px; letter-spacing: -.01em; }
+  h1 b { color: var(--accent); font-weight: 700; }
+  .count { margin: 0 auto; max-width: 520px; }
+  .count p { margin: 0 0 8px; color: var(--muted); }
+  .count strong { color: var(--ink); font-size: 1.15em; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; border-radius: 99px; background: var(--seat); overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--gold));
+              border-radius: 99px; transition: width 1.6s cubic-bezier(.2, .8, .2, 1); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 16px auto 0; max-width: 860px; padding: 0 8px; }
+  .chip { font: 500 13px Onest, sans-serif; color: var(--ink); background: var(--bg-2); border: 1px solid var(--line);
+          border-radius: 99px; padding: 5px 12px; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+  .chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: oklch(99% 0.01 89); }
+  .chip small { opacity: .7; margin-left: 4px; }
+  .chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 0 8px 28px; position: relative; }
+  .hallwrap { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .hallwrap::-webkit-scrollbar { display: none; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .hint { display: none; text-align: center; color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  @media (max-width: 700px) { svg { width: 760px; } .hint { display: block; } }
+
+  /* кресла */
+  .seat { transform-box: fill-box; transform-origin: center; }
+  .seat > g { transform-box: fill-box; transform-origin: center; opacity: 0; transform: scale(.4) translateY(14px); }
+  .ready .seat > g { animation: sit .55s var(--ease) forwards; animation-delay: calc(var(--d) * 1ms); }
+  @keyframes sit { to { opacity: 1; transform: none; } }
+  .ready .seat.calm > g { animation: none; opacity: 1; transform: none; }   /* обновление на лету: зал не «пересаживается» */
+  .seat--on { cursor: pointer; }
+  .seat--on .inner { transition: transform .18s var(--ease); transform-box: fill-box; transform-origin: center; }
+  .seat--on:hover .inner, .seat--on:focus .inner, .seat--on.is-pick .inner { transform: scale(1.22); }
+  .seat--on:hover .ring, .seat--on:focus .ring, .seat--on.is-pick .ring { stroke: var(--gold); stroke-width: 4; }
+  .seat:focus { outline: none; }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 2.5; transition: stroke .15s; }
+  .empty { fill: var(--seat); stroke: var(--line); stroke-width: 1.5; transition: fill .2s, stroke .2s; }
+  .seat--free:hover .empty { fill: oklch(32% 0.07 276); stroke: var(--gold); }
+  .seat--free { cursor: help; }
+  .initials { fill: var(--ink); font: 600 15px Onest, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .seat.is-dim { opacity: .18; transition: opacity .3s; }
+  .seat { transition: opacity .3s; }
+  /* новенькие — мягкое свечение */
+  .glow { fill: none; stroke: var(--gold); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .seat--new .glow { animation: halo 2.4s ease-in-out infinite; animation-delay: 1.4s; }
+  @keyframes halo { 0%, 100% { opacity: 0; transform: none; } 50% { opacity: .9; transform: scale(1.25); } }
+  /* следующее свободное место зовёт */
+  .seat--next .empty { stroke: var(--gold); stroke-dasharray: 4 3; animation: beckon 1.8s ease-in-out infinite; }
+  .plus { fill: var(--gold); font: 600 18px Onest, sans-serif; text-anchor: middle; dominant-baseline: central; opacity: 0; pointer-events: none; }
+  .seat--next .plus { opacity: .95; }
+  @keyframes beckon { 50% { fill: oklch(34% 0.08 70); } }
+  /* только что вошёл — салют */
+  .seat--arrived .inner { animation: arrive 1.1s var(--ease); }
+  @keyframes arrive { 0% { transform: scale(0) rotate(-20deg); } 60% { transform: scale(1.5); } 100% { transform: none; } }
+  .spark { fill: var(--gold); opacity: 0; }
+  .seat--arrived .spark { animation: spark .9s ease-out forwards; }
+  @keyframes spark { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(.3); } }
+
+  .stage { fill: url(#stageGrad); }
+  .stage-t { fill: var(--ink); font: 700 22px Unbounded, sans-serif; text-anchor: middle; letter-spacing: .3em; }
+  .light { fill: url(#lightGrad); mix-blend-mode: screen; transform-origin: 500px 650px; animation: sweep 9s ease-in-out infinite alternate; }
+  @keyframes sweep { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+
+  .tip { position: fixed; z-index: 5; pointer-events: none; max-width: 260px; padding: 10px 12px; border-radius: 10px;
+         background: oklch(98% 0.01 89); color: oklch(23% 0.088 275); box-shadow: 0 8px 28px rgb(0 0 0 / .35);
+         font-size: 14px; line-height: 1.35; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s; }
+  .tip.on { opacity: 1; transform: none; }
+  .tip b { display: block; font-size: 15px; margin-bottom: 2px; }
+  .tip span { display: block; color: oklch(40% 0.05 276); }
+  .tip .new { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; color: oklch(45% 0.15 50);
+              background: oklch(92% 0.06 80); border-radius: 99px; padding: 1px 7px; vertical-align: 2px; }
+
+  .panel { position: fixed; inset: auto 0 0 0; z-index: 6; max-height: 80vh; overflow: auto; background: var(--bg-2);
+           border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; padding: 20px 16px 28px;
+           transform: translateY(105%); transition: transform .3s var(--ease); box-shadow: 0 -12px 40px rgb(0 0 0 / .4); }
+  .panel.on { transform: none; }
+  .panel__in { max-width: 640px; margin: 0 auto; display: grid; gap: 14px; }
+  .panel__head { display: flex; gap: 14px; align-items: center; }
+  .panel__head img, .panel__head .ph { width: 84px; height: 84px; border-radius: 14px; object-fit: cover; flex: none;
+           border: 2px solid var(--accent); background: var(--seat); display: grid; place-items: center; font-weight: 600; font-size: 26px; }
+  .panel h2 { font: 600 22px/1.2 Unbounded, sans-serif; margin: 0; }
+  .panel .sub { color: var(--muted); margin: 4px 0 0; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; color: oklch(25% 0.08 60); background: var(--gold);
+           border-radius: 99px; padding: 2px 9px; margin-top: 6px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0; }
+  .facts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .facts dt { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .facts dd { margin: 2px 0 0; font-weight: 500; }
+  .goal { margin: 0; padding: 12px 14px; border-left: 3px solid var(--gold); background: var(--bg); border-radius: 0 10px 10px 0; }
+  .goal--plain { border-left-color: var(--line); }
+  .goal small, .near small { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 12px; margin-bottom: 6px; }
+  .near__list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .near button { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+                 border-radius: 99px; padding: 4px 12px 4px 4px; font: 500 14px Onest, sans-serif; cursor: pointer; }
+  .near button:hover { border-color: var(--accent); }
+  .near img, .near .mini { width: 30px; height: 30px; border-radius: 7px; object-fit: cover; background: var(--seat);
+                           display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .close { justify-self: end; background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 99px;
+           padding: 6px 14px; font: inherit; cursor: pointer; }
+
+  .toast { position: fixed; left: 50%; top: 18px; z-index: 7; transform: translate(-50%, -220%); visibility: hidden;
+           transition: transform .45s var(--ease), visibility 0s .45s;
+           background: var(--gold); color: oklch(22% 0.07 60); font-weight: 600; border-radius: 99px; padding: 10px 18px;
+           box-shadow: 0 10px 30px rgb(0 0 0 / .35); max-width: calc(100vw - 32px); text-align: center; }
+  .toast.on { transform: translate(-50%, 0); visibility: visible; transition: transform .45s var(--ease); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .seat > g { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <p class="kicker kicker--brand">vershina.mastermind</p>
+  <h1>Зал <b>ММ8</b></h1>
+  <div class="count">
+    <p><strong id="nFilled">0</strong> <strong>из {{ total }}</strong> мест заняты <span id="nFree"></span></p>
+    <div class="bar" role="img" aria-label="Заполнено {{ filled }} из {{ total }}"><span id="barFill"></span></div>
+  </div>
+  <div class="chips" id="chips" aria-label="Подсветить город"></div>
+</header>
+
+<main>
+<p class="hint">Листайте зал вбок · нажмите на фото</p>
+<div class="hallwrap" id="hallwrap">
+<svg viewBox="-70 20 1140 670" role="img" aria-label="Зал на {{ total }} мест" id="hall">
+  <defs>
+    <linearGradient id="stageGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="oklch(66% 0.19 40)" stop-opacity=".9"/>
+      <stop offset="1" stop-color="oklch(45% 0.14 30)" stop-opacity=".9"/>
+    </linearGradient>
+    <radialGradient id="lightGrad" cx="500" cy="650" r="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="oklch(85% 0.1 80)" stop-opacity=".22"/>
+      <stop offset="1" stop-color="oklch(85% 0.1 80)" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="c"><rect x="-21" y="-21" width="42" height="42" rx="7"/></clipPath>
+  </defs>
+  <path class="light" d="M 500 650 L 330 80 L 670 80 Z"/>
+  <g id="seats"></g>
+  <path class="stage" d="M 330 640 Q 500 585 670 640 L 670 672 L 330 672 Z"/>
+  <text class="stage-t" x="500" y="660">ММ8</text>
+</svg>
+</div>
+</main>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<section class="panel" id="panel" aria-live="polite"><div class="panel__in" id="panelIn"></div></section>
+
+
+<script>
+const BASE = "{{ base }}", TOTAL = {{ total }}, NEW_N = 3;
+const SEATS = {{ seats_json | safe }};
+let PEOPLE = {{ people_json | safe }}, AT = {{ at_json | safe }};
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+const esc = s => String(s || "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const byOrder = [...SEATS].sort((a, b) => a.order - b.order);
+let cityOn = null, pickI = null;
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const isNew = i => i >= PEOPLE.length - NEW_N;
+const cityKey = c => (c || "").trim().toLowerCase().replace(/ё/g, "е").split(/[,(]/)[0].trim();
+
+function draw(arrived) {
+  const host = $("seats"); host.innerHTML = ""; tip.classList.remove("on");
+  byOrder.forEach((s, rank) => {
+    const p = PEOPLE[rank], g = el("g", {class: "seat" + (arrived ? " calm" : ""), transform: `translate(${s.x},${s.y})`}, host);
+    g.style.setProperty("--d", String((s.row - 1) * 110 + Math.abs(s.x - 500) * .35));
+    const inner = el("g", {}, g);
+    if (p) {
+      g.classList.add("seat--on"); g.dataset.i = rank;
+      if (isNew(rank)) g.classList.add("seat--new");
+      if (arrived && arrived.has(p.name)) g.classList.add("seat--arrived");
+      g.setAttribute("tabindex", "0"); g.setAttribute("role", "button"); g.setAttribute("aria-label", p.name);
+      const face = el("g", {class: "inner"}, inner);
+      el("rect", {class: "glow", x: -24, y: -24, width: 48, height: 48, rx: 9}, face);
+      if (p.photo) {
+        el("image", {href: `${BASE}/photo/${p.photo}?v=${encodeURIComponent(AT || "")}`, x: -21, y: -21, width: 42, height: 42,
+                     "clip-path": "url(#c)", preserveAspectRatio: "xMidYMid slice"}, face);
+      } else {
+        el("rect", {x: -21, y: -21, width: 42, height: 42, rx: 7, fill: "oklch(34% 0.115 276)"}, face);
+        el("text", {class: "initials"}, face).textContent = p.ini;
+      }
+      el("rect", {class: "ring", x: -22, y: -22, width: 44, height: 44, rx: 8}, face);
+      for (let k = 0; k < 8; k++) {           // искры для «только что вошёл»
+        const a = k / 8 * Math.PI * 2, sp = el("circle", {class: "spark", r: 3}, face);
+        sp.style.setProperty("--sx", Math.cos(a) * 46 + "px"); sp.style.setProperty("--sy", Math.sin(a) * 46 + "px");
+      }
+    } else {
+      g.classList.add("seat--free");
+      if (rank === PEOPLE.length) g.classList.add("seat--next");
+      el("rect", {class: "empty", x: -17, y: -15, width: 34, height: 30, rx: 9}, inner);
+      el("text", {class: "plus"}, inner).textContent = "+";
+    }
+  });
+  bind(); applyCity();
+  requestAnimationFrame(() => $("hall").classList.add("ready"));
+}
+
+function countUp() {
+  const n = Math.min(PEOPLE.length, TOTAL), out = $("nFilled");
+  const free = TOTAL - n;
+  $("nFree").textContent = free ? `· свободно ${free}` : "· зал полный!";
+  $("barFill").style.width = (n / TOTAL * 100).toFixed(1) + "%";
+  if (still) { out.textContent = n; return; }
+  const from = +out.textContent || 0, t0 = performance.now(), dur = 1400;
+  const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    out.textContent = Math.round(from + (n - from) * e); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+// город получает свою кнопку от 2 человек; остальные и те, у кого город не указан, — в «Другие»,
+// чтобы сумма по кнопкам всегда равнялась числу людей в зале (Марья 29.10)
+const OTHER = "~";
+let COUNTS = {};
+const groupOf = p => { const k = cityKey(p.city); return k && COUNTS[k] >= 2 ? k : OTHER; };
+function chips() {
+  const label = {}; COUNTS = {};
+  PEOPLE.forEach(p => { const k = cityKey(p.city); if (!k) return; COUNTS[k] = (COUNTS[k] || 0) + 1; label[k] = label[k] || p.city.split(/[,(]/)[0].trim(); });
+  const top = Object.keys(COUNTS).filter(k => COUNTS[k] >= 2).sort((a, b) => COUNTS[b] - COUNTS[a]);
+  const other = PEOPLE.filter(p => groupOf(p) === OTHER).length;
+  if (cityOn && cityOn !== OTHER && !top.includes(cityOn)) cityOn = null;
+  const chip = (c, text, n) => `<button class="chip" type="button" data-c="${esc(c)}" aria-pressed="${(cityOn || "") === c}">${esc(text)}<small>${n}</small></button>`;
+  $("chips").innerHTML = PEOPLE.length ? chip("", "Все", PEOPLE.length) + top.map(k => chip(k, label[k], COUNTS[k])).join("") +
+    (other ? chip(OTHER, "Другие", other) : "") : "";
+  $("chips").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => { cityOn = b.dataset.c || null; chips(); applyCity(); }));
+}
+function applyCity() {
+  document.querySelectorAll("#seats .seat").forEach(g => {
+    const p = PEOPLE[g.dataset.i];
+    g.classList.toggle("is-dim", !!cityOn && !(p && groupOf(p) === cityOn));
+  });
+}
+
+const tip = $("tip"), panel = $("panel"), inner = $("panelIn");
+function placeTip(g) {
+  const r = g.getBoundingClientRect();
+  const x = r.left + r.width / 2 - 130; let y = r.top - tip.offsetHeight - 10;
+  if (y < 8) y = r.bottom + 10;
+  tip.style.left = Math.max(8, Math.min(x, innerWidth - 268)) + "px"; tip.style.top = y + "px";
+  tip.classList.add("on");
+}
+function showTip(g) {
+  const p = PEOPLE[g.dataset.i];
+  if (!p) { tip.innerHTML = "<b>Свободное место</b><span>Это место ждёт — пригласи друга 🙌</span>"; return placeTip(g); }
+  const bits = [p.city, p.niche_short, p.revenue && "доход " + p.revenue].filter(Boolean);
+  tip.innerHTML = `<b>${esc(p.name)}${isNew(+g.dataset.i) ? '<em class="new">новенький</em>' : ""}</b>` +
+    (bits.map(x => `<span>${esc(x)}</span>`).join("") || "<span>нажмите — подробнее</span>");
+  placeTip(g);
+}
+function neighbours(i) {
+  const s = byOrder[i];
+  return SEATS.filter(o => (o.row === s.row && Math.abs(o.no - s.no) === 1))
+    .map(o => o.order).filter(o => PEOPLE[o]);
+}
+const face = (p, cls) => p.photo ? `<img class="${cls}" src="${BASE}/photo/${esc(p.photo)}" alt="">` : `<div class="${cls}">${esc(p.ini)}</div>`;
+function open(i) {
+  i = +i; const p = PEOPLE[i]; if (!p) return;
+  document.querySelectorAll(".is-pick").forEach(n => n.classList.remove("is-pick"));
+  const g = document.querySelector(`#seats .seat[data-i="${i}"]`); if (g) g.classList.add("is-pick");
+  pickI = i;
+  const facts = [["Город", p.city], ["Доход", p.revenue], ["Чистая прибыль", p.profit],
+                 ["Команда", p.team], ["Пригласил(а)", p.inviter]].filter(f => f[1]);
+  const near = neighbours(i);
+  inner.innerHTML = `
+    <button class="close" type="button" aria-label="Закрыть">Закрыть ✕</button>
+    <div class="panel__head">${face(p, "ph")}
+      <div><h2>${esc(p.name)}</h2><p class="sub">${esc([p.city, p.niche_short].filter(Boolean).join(" · "))}</p>
+      ${isNew(i) ? '<span class="badge">новенький в зале</span>' : ""}</div></div>
+    ${facts.length ? `<dl class="facts">${facts.map(f => `<div><dt>${f[0]}</dt><dd>${esc(f[1]).replace(/\n/g, "<br>")}</dd></div>`).join("")}</dl>` : ""}
+    ${p.niche && p.niche !== p.niche_short ? `<p class="goal goal--plain"><small>Чем занимается</small>${esc(p.niche).replace(/\n/g, "<br>")}</p>` : ""}
+    ${p.goal ? `<p class="goal"><small>Куда идёт</small>${esc(p.goal).replace(/\n/g, "<br>")}</p>` : ""}
+    ${near.length ? `<div class="near"><small>Рядом сидят</small><div class="near__list">${near.map(o =>
+        `<button type="button" data-i="${o}">${face(PEOPLE[o], "mini")}${esc(PEOPLE[o].name)}</button>`).join("")}</div></div>` : ""}`;
+  panel.classList.add("on"); tip.classList.remove("on");
+  inner.querySelector(".close").addEventListener("click", closePanel);
+  inner.querySelectorAll(".near button").forEach(b => b.addEventListener("click", () => open(b.dataset.i)));
+}
+function closePanel() { panel.classList.remove("on"); document.querySelectorAll(".is-pick").forEach(n => n.classList.remove("is-pick")); pickI = null; }
+function bind() {
+  document.querySelectorAll("#seats .seat").forEach(g => {
+    g.addEventListener("mouseenter", () => showTip(g));
+    g.addEventListener("mouseleave", () => tip.classList.remove("on"));
+    if (!g.classList.contains("seat--on")) return;
+    g.addEventListener("focus", () => showTip(g));
+    g.addEventListener("blur", () => tip.classList.remove("on"));
+    g.addEventListener("click", () => open(g.dataset.i));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(g.dataset.i); } });
+  });
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 4200);
+}
+// зал живой: раз в минуту — нет ли новых
+async function poll() {
+  if (document.hidden) return;
+  try {
+    const r = await fetch(`${BASE}/data`, {cache: "no-store"});
+    if (!r.ok) return;
+    const d = await r.json();
+    const was = new Set(PEOPLE.map(p => p.name));
+    const fresh = d.people.filter(p => !was.has(p.name));
+    const changed = fresh.length || d.people.length !== PEOPLE.length || d.at !== AT;
+    if (!changed) return;
+    PEOPLE = d.people; AT = d.at;
+    chips(); draw(new Set(fresh.map(p => p.name))); countUp();
+    if (fresh.length === 1) toast(`В зал вошёл(а) ${fresh[0].name.split(/\s+/)[0]}! 🎉`);
+    else if (fresh.length > 1) toast(`В зале +${fresh.length} новых участника 🎉`);
+  } catch (e) { /* сеть моргнула — в следующий раз */ }
+}
+
+chips(); draw(); setTimeout(countUp, 250);
+const wrap = $("hallwrap"); wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
+setInterval(poll, 60000);
+</script>
+</body>
+</html>

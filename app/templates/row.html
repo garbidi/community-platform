@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} · {{ p.flow }} · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <p class="head__meta"><a href="/rows?flow={{ flow.id if flow else '' }}#r{{ p.id }}">← Таблица {{ p.flow }}</a></p>
+  <h1>{{ p.name }}</h1>
+  <p class="head__meta">{{ p.flow }}{% if moved_from %} · перенесён из <a href="/rows/{{ moved_from.id }}">{{ moved_from.flow }}</a>{% endif %}
+    · <a href="/participants/{{ card }}">карточка участника</a> (разборы, декларация, сведения)</p>
+</div>
+
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if moved_to %}<p class="alarm">Строка перенесена в <a href="/rows/{{ moved_to.id }}">{{ moved_to.flow }}</a>. Здесь — только след; комментарии, оплаты и записи переехали вместе с ней.</p>{% endif %}
+
+<div class="rowpage">
+<div>
+  <div class="section"><h2>Данные</h2><p>Правятся здесь или прямо в таблице</p></div>
+  <dl class="surface rowfields">
+    {% for k, title, _ in cols %}
+    <dt>{{ title }}</dt>
+    <dd><div class="cell"{% if not moved_to %} contenteditable="plaintext-only" data-pid="{{ p.id }}" data-key="{{ k }}"
+         data-v="{{ (p[k] if k in ('name','username') else fmt_phone(p[k]) if k == 'phone' else profile.get(k)) or '' }}"{% endif %}>{{ (p[k] if k in ('name','username') else fmt_phone(p[k]) if k == 'phone' else profile.get(k)) or '' }}</div></dd>
+    {% endfor %}
+  </dl>
+  <p class="tag" id="rowsave" aria-live="polite"></p>
+
+  {% if proposed %}
+  <div class="section"><h2>Из разборов ждёт подтверждения · {{ proposed|length }}</h2>
+    <p>Платформа вытащила это из записей. Принять или отклонить — в <a href="/participants/{{ card }}?tab=info">карточке, вкладка «Сведения»</a>; принятое встанет в столбцы таблицы (город, ниша, доход, точка Б), если они пустые</p></div>
+  <ul class="surface rowlist">
+    {% for x in proposed %}<li><b>{{ {'city':'Город','work':'Чем занимается','income':'Доход','request':'Запрос','about':'О себе'}.get(x.field, x.field) }}:</b> {{ x.value }} <span class="tag">· {{ x.source }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="section" id="records"><h2>Записи и разборы</h2>
+    <p>Пришлите запись разбора или созвона — она расшифруется и разберётся сама: выжимка для ментора, цифры, черновик целей, сведения в строку</p></div>
+  <div class="surface">
+    {% for r in reviews %}
+    <p style="margin:0 0 var(--space-2xs)"><a href="/participants/{{ card }}#razbory">{{ r.title or 'Разбор' }}</a>
+      <span class="tag">· {{ r.held_on|d if r.held_on else r.created_at|stamp }} · {{ r.status }}</span></p>
+    {% else %}<p class="tag" style="margin-top:0">Записей пока нет.</p>{% endfor %}
+    {% if not moved_to %}
+    <form class="filters" method="post" action="/participants/{{ card }}/reviews" enctype="multipart/form-data">
+      <label>Что за запись<input name="title" placeholder="Разбор в малой группе"></label>
+      <label>Дата<input type="date" name="held_on" value="{{ today }}"></label>
+      <label class="grow">Файл<input type="file" name="file" required accept=".m4a,.mp3,.wav,.ogg,.oga,.opus,.webm,.mp4,.txt"></label>
+      <button>Загрузить</button>
+    </form>
+    <p class="tag" style="margin-bottom:0">После загрузки откроется карточка: там видно, как идёт расшифровка и разбор (несколько минут).</p>
+    {% endif %}
+  </div>
+</div>
+
+<div>
+  <div class="section"><h2>Теги</h2></div>
+  <form class="surface filters" method="post" action="/rows/{{ p.id }}/tags">
+    <label class="grow">Через запятую<input name="tags" value="{{ tags|join(', ') }}" list="tagsuggest" {{ 'disabled' if moved_to }}></label>
+    <datalist id="tagsuggest">{% for t in flow_tags %}<option value="{{ t }}">{% endfor %}</datalist>
+    {% if not moved_to %}<button class="quiet">Сохранить</button>{% endif %}
+    {% if flow_tags %}<p class="tag" style="flex-basis:100%;margin:0">В потоке уже есть: {{ flow_tags|join(', ') }}</p>{% endif %}
+  </form>
+
+  <div class="section" id="pays"><h2>Оплаты</h2></div>
+  <div class="surface">
+    {% for x in pays %}
+    <p style="margin:0 0 var(--space-3xs)"><b>{{ x.amount|money if x.amount else '— ₽' }}</b>
+      <span class="tag">· {{ x.paid_on|d if x.paid_on else '' }} · {{ x.kind }}{% if x.product %} · {{ x.product }}{% endif %}{% if x.engaged %} · вовлёк: {{ x.engaged }}{% endif %}{% if x.note %} · {{ x.note }}{% endif %}{% if x.added_by %} · внёс {{ x.added_by }}{% endif %}</span></p>
+    {% else %}<p class="tag" style="margin-top:0">Оплат нет.</p>{% endfor %}
+    {% if not moved_to %}
+    <details><summary class="tag">+ внести оплату вручную (наличные, перевод, рассрочка)</summary>
+      <form class="filters" method="post" action="/rows/{{ p.id }}/pay">
+        <label>Сумма, ₽<input name="amount" inputmode="numeric" required></label>
+        <label>Дата<input type="date" name="paid_on" value="{{ today }}"></label>
+        <label class="grow">Пометка<input name="text" placeholder="вторая часть рассрочки"></label>
+        <button>Внести</button>
+      </form></details>
+    {% endif %}
+  </div>
+
+  {% if not moved_to %}
+  <div class="section"><h2>Перенести в другой поток</h2>
+    <p>Например, не на следующий поток, а через один. Нужного потока нет — сначала <a href="/flows">создайте его</a></p></div>
+  <form class="surface filters" method="post" action="/rows/{{ p.id }}/move">
+    <label class="grow">Поток<select name="flow_id" required><option value="">—</option>
+      {% for x in open_flows if x.name != p.flow %}<option value="{{ x.id }}">{{ x.name }}{% if x.start %} · старт {{ x.start|d }}{% endif %}</option>{% endfor %}</select></label>
+    <button data-confirm="Перенести «{{ p.name }}»? Комментарии, теги, оплаты и записи переедут, здесь останется пометка «перенесён».">Перенести</button>
+  </form>
+  {% endif %}
+
+  <div class="section" id="notes"><h2>Комментарии и история</h2></div>
+  <div class="surface">
+    {% if not moved_to %}
+    <form method="post" action="/rows/{{ p.id }}/note" class="rownote">
+      <textarea name="text" rows="2" required placeholder="Комментарий: договорились, ждём, сказал, что…"></textarea>
+      <button>Добавить</button>
+    </form>
+    {% endif %}
+    {% for n in notes %}
+    <div class="rownote__item{{ ' rownote__item--event' if n.kind == 'событие' }}">
+      <div class="tag">{{ n.author or 'платформа' }} · {{ n.created_at|stamp }}{% if n.kind == 'событие' %} · событие{% endif %}
+        {% if n.kind == 'комментарий' and n.author == user.name %}
+        <form method="post" action="/rows/{{ p.id }}/note/{{ n.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить комментарий?')"><button class="linkish">удалить</button></form>{% endif %}</div>
+      <p style="margin:0;white-space:pre-wrap">{{ n.text }}</p>
+    </div>
+    {% else %}<p class="tag" style="margin:0">Пока пусто.</p>{% endfor %}
+  </div>
+</div>
+</div>
+
+<script>
+document.addEventListener("click", e => { const b = e.target.closest("button[data-confirm]"); if (b && !confirm(b.dataset.confirm)) e.preventDefault(); });
+(() => {
+  const say = (t, bad) => { const el = document.getElementById("rowsave"); el.textContent = t; el.classList.toggle("late", !!bad); };
+  document.querySelectorAll(".cell[contenteditable]").forEach(el => {
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.blur(); }
+      if (e.key === "Escape") { el.textContent = el.dataset.v; el.blur(); }
+    });
+    el.addEventListener("blur", () => {
+      const v = el.textContent.trim();
+      if (v === el.dataset.v) return;
+      const b = new FormData(); b.append("key", el.dataset.key); b.append("value", v);
+      say("Сохраняю…");
+      fetch(`/rows/${el.dataset.pid}/cell`, { method: "POST", body: b, credentials: "same-origin" }).then(r => r.json()).then(r => {
+        if (!r.ok) { say(r.err || "Не сохранилось", true); el.textContent = el.dataset.v; return; }
+        el.dataset.v = r.value; el.textContent = r.value; say("Сохранено");
+      }).catch(() => { say("Нет связи — не сохранилось", true); el.textContent = el.dataset.v; });
+    });
+  });
+})();
+</script>
+{% endblock %}

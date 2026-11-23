@@ -1,0 +1,56 @@
+{# Цели на поток, которые ведёт ментор: общий блок карточек #}
+<div class="section" id="celi-potok"><h2>{% if own %}Ваши цели на поток{% else %}Цели на поток{% endif %}</h2>
+  <p>{% if own %}Цели, которые вы поставили на разборе, и как вы по ним идёте{% else %}Из разборов и от ментора; статус отмечает ментор по ходу потока{% endif %}</p></div>
+
+{% if goals %}
+<div class="scroll">
+<table>
+  <thead><tr><th>Цель</th><th>Срок</th><th>Статус</th><th>Заметка</th>{% if may_lead %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for g in goals %}
+  <tr>
+    <td>{{ g.text }}{% if g.review_id %} <span class="tag">из разбора</span>{% endif %}
+      {% if g.proof %}<div class="tag" style="margin-top:2px">подтвердит: {{ g.proof }}</div>{% endif %}
+      {% set st = steps.get(g.id, []) if steps else [] %}
+      {% if st %}
+      <ul style="margin:var(--space-2xs) 0 0;padding-left:0;list-style:none">
+        {% for s in st %}
+        <li style="{{ 'opacity:.6' if s.done }}">
+          {% if may_lead %}<form method="post" action="/participants/{{ p.user_id }}/steps/{{ s.id }}" style="display:inline"><button class="quiet" style="padding:0 .35rem" title="Отметить">{{ '✓' if s.done else '○' }}</button></form>{% else %}{{ '✓' if s.done else '○' }}{% endif %}
+          {{ s.title }}{% if s.deadline %} <span class="tag">до {{ s.deadline|d }}</span>{% endif %}{% if s.done_by and s.done %} <span class="tag">· {{ s.done_by }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </td>
+    <td class="tag">{{ g.deadline|d if g.deadline else (g.due or '—') }}</td>
+    {% if may_lead %}
+    <td colspan="2">
+      <form method="post" action="/participants/{{ p.user_id }}/goals/{{ g.id }}" class="filters" style="margin:0;flex-wrap:nowrap">
+        <select name="status">{% for st in goal_statuses %}<option value="{{ st }}" {{ 'selected' if st == g.status }}>{{ st }}</option>{% endfor %}</select>
+        <input name="note" value="{{ g.note or '' }}" placeholder="что происходит" style="min-width:10rem">
+        <button class="quiet" type="submit">Сохранить</button>
+      </form>
+    </td>
+    <td class="right"><form method="post" action="/participants/{{ p.user_id }}/goals/{{ g.id }}/remove"><button class="quiet">Убрать</button></form></td>
+    {% else %}
+    <td><span class="state {{ 'state--quiet' if g.status == 'буксует' else 'state--lost' if g.status == 'выпал' else '' }}">{{ g.status }}</span></td>
+    <td class="tag">{{ g.note or '' }}</td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="surface"><p style="margin:0">Целей на поток пока нет — они появятся после загрузки разбора{% if may_lead %} или их можно добавить ниже{% endif %}.</p></div>
+{% endif %}
+
+{% if may_lead %}
+<form class="filters filters--stack surface" method="post" action="/participants/{{ p.user_id }}/goals">
+  <label class="grow">Цель<input name="text" required placeholder="Выйти на 3 млн выручки в месяц"></label>
+  <label>Срок<input name="due" placeholder="к концу потока"></label>
+  <button type="submit">Добавить цель</button>
+</form>
+{% endif %}
+

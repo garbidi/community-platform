@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Архив · Команды · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Команды<span class="brace">}</span></h1>
+  <p class="head__meta">Архив: вовлечения ММ5 и ММ6, собранные по объявлениям в чатах («+1 вовлечённый»).
+    Потоки велись до платформы — денег и штрафов здесь нет</p>
+</div>
+
+<nav class="tabs" aria-label="Потоки">
+  {% for x in choices %}<a href="/teams?flow={{ x.name | urlencode }}">{{ x.name }}</a>{% endfor %}
+  <a href="/teams?view=archive" class="is-on">Архив: ММ5 и ММ6</a>
+</nav>
+
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th class="num">Объявлений</th><th>Первое</th><th>Последнее</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr><td><a href="/participants/{{ r.tg }}">{{ r.name }}</a></td><td class="num">{{ r.n }}</td>
+    <td>{{ r.first | d if r.first else '—' }}</td><td>{{ r.last | d if r.last else '—' }}</td></tr>
+  {% else %}
+  <tr><td colspan="4">Архив пуст.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

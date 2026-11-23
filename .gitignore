@@ -1,0 +1,16 @@
+# секреты и пароли
+bot.env
+*.env
+!*.env.example
+logins.txt
+mentor-passwords.txt
+*.session
+*.session-journal
+# данные и кэш
+*.sqlite*
+*.db
+data/
+__pycache__/
+node_modules/
+.hallmark/
+*.bak-*

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Вершина{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <link rel="icon" href="/static/logo-navy.svg">
+  <script>try { if (localStorage.getItem("rail-hidden") === "1") document.documentElement.classList.add("rail-off"); } catch (e) {}</script>
+</head>
+<body data-motion="{{ motion or 'auto' }}">
+<div class="shell">
+  <button type="button" class="railtoggle" data-railtoggle aria-controls="rail" aria-expanded="true" title="Скрыть меню">
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <nav class="rail" id="rail">
+    <a class="rail__logo" href="/"><img src="/static/logo-mark.svg" alt="Вершина"></a>
+    {% macro rail_link(item) %}{% set on = path == item.href or (item.href != '/' and path.startswith(item.href ~ '/')) %}<a href="{{ item.href }}"{% if on %} aria-current="page"{% endif %}>{{ item.title }}</a>{% endmacro %}
+    <div class="rail__nav">
+      {% for item in nav if not item.group %}{{ rail_link(item) }}{% endfor %}
+    </div>
+    {% set adm = nav | selectattr('group') | list %}
+    {% if adm %}
+    <details class="rail__group" data-rail-group{% for item in adm %}{% if path == item.href or path.startswith(item.href ~ '/') %} open{% endif %}{% endfor %}>
+      <summary>Управление</summary>
+      <div class="rail__nav">{% for item in adm %}{{ rail_link(item) }}{% endfor %}</div>
+    </details>
+    {% endif %}
+    <div class="rail__foot">
+      <b>{{ user.name }}</b>
+      <span class="rail__role">{{ role_title }}</span>
+      <a class="rail__settings" href="/settings"{% if path == '/settings' %} aria-current="page"{% endif %}>Настройки</a>
+      <form method="post" action="/logout"><button class="rail__out">Выйти</button></form>
+    </div>
+  </nav>
+
+  <script>
+    // «Управление» в меню: помнить, раскрыт ли блок (кроме случая, когда в нём текущая страница)
+    (function () {
+      var g = document.querySelector("[data-rail-group]");
+      if (!g) return;
+      try { if (!g.open && localStorage.getItem("rail-adm") === "1") g.open = true; } catch (e) {}
+      g.addEventListener("toggle", function () { try { localStorage.setItem("rail-adm", g.open ? "1" : "0"); } catch (e) {} });
+    })();
+    // меню слева плавно прячется и запоминается; полотно после этого пересчитывает размеры
+    (function () {
+      var b = document.querySelector("[data-railtoggle]"), root = document.documentElement, rail = document.getElementById("rail");
+      function sync() {
+        var off = root.classList.contains("rail-off");
+        b.setAttribute("aria-expanded", off ? "false" : "true");
+        b.title = off ? "Показать меню" : "Скрыть меню";
+        rail.inert = off && matchMedia("(min-width: 901px)").matches;
+      }
+      sync();
+      requestAnimationFrame(function () { root.classList.add("rail-anim"); });
+      b.addEventListener("click", function () {
+        root.classList.toggle("rail-off");
+        try { localStorage.setItem("rail-hidden", root.classList.contains("rail-off") ? "1" : "0"); } catch (e) {}
+        sync();
+      });
+      rail.addEventListener("transitionend", function (e) {
+        if (e.target === rail && e.propertyName === "width") window.dispatchEvent(new Event("resize"));
+      });
+    })();
+  </script>
+
+  <main class="canvas">
+    {% block body %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

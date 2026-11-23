@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Контекст · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Контекст<span class="brace">}</span></h1>
+  <p class="head__meta">{{ msg.chat }} · {{ msg.when }} ·
+    <a href="/participants/{{ msg.user_id }}">{{ msg.author }}</a></p>
+</div>
+<div class="surface">
+  {% for m in thread %}
+  <div class="talk {{ 'talk--here' if m.msg_id == msg.msg_id }}">
+    <div class="talk__meta">
+      <a href="/participants/{{ m.user_id }}">{{ m.author }}</a>
+      <span>{{ m.kind }}</span><span>{{ m.when }}</span></div>
+    <div class="talk__body">{{ m.text }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

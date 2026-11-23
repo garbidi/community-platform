@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+{% block title %}{{ f.name }} · Потоки · Вершина
+{% endblock %}
+{% block body %}
+{% macro staff_select(name, picked) %}
+<div class="checklist">
+  {% for u in staff %}<label><input type="checkbox" name="{{ name }}" value="{{ u.id }}" {{ 'checked' if u.id in picked }}>
+    {{ u.name }} <span class="tag">@{{ u.login }}{% if u.role != 'mentor' %} · {{ 'координатор' if u.role == 'coordinator' else 'админ' }}{% endif %}</span></label>{% endfor %}
+</div>
+{% endmacro %}
+
+<div class="head">
+  <p class="head__meta" style="margin:0 0 var(--space-2xs)"><a href="/flows">← Все потоки</a></p>
+  <h1><span class="brace">{</span>{{ f.name }}<span class="brace">}</span></h1>
+  <p class="head__meta">
+    {% if f.is_current %}<span class="pill pill--accent">текущий</span> {% endif %}<span class="pill">{{ f.status }}</span>
+    {% for r in people %} · {{ r.n }} {{ r.status }}{% endfor %}
+    {% if sync %} · таблицы {{ 'обновлены' if sync.ok else 'не обновились' }} {{ sync.at|stamp }}{% if not sync.ok %}: {{ sync.message }}{% endif %}{% endif %}
+  </p>
+</div>
+
+{% if pick %}
+<a class="pickbar" href="/flows/{{ f.id }}/selection">
+  <span class="pickbar__title">Отбор в основной ММ</span>
+  <span class="pickbar__bar" aria-hidden="true">{% for k, t, v in pick.lanes %}<span class="tally__seg tally__seg--{{ k }}" style="flex-grow: {{ pick.counts[k] }}"></span>{% endfor %}</span>
+  <span class="pickbar__nums">{% for k, t, v in pick.lanes %}<span><b>{{ pick.counts[k] }}</b> {{ t|lower }}</span>{% endfor %}</span>
+  <span class="pickbar__go">Открыть отбор →</span>
+</a>
+{% endif %}
+
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+
+{% if new_user %}
+<div class="surface proposals">
+  <h3>Ментор заведён — передайте ему доступ</h3>
+  <p style="margin:0">Пароль показывается один раз. Скопируйте сообщение целиком:</p>
+  <pre class="copybox">Вход в платформу Вершины: {{ request.base_url }}
+Логин: {{ new_user.login }}
+Пароль: {{ new_user.password }}</pre>
+  <p class="head__meta" style="margin:0">Теперь выберите его ментором в команде ниже.</p>
+</div>
+{% endif %}
+
+<!-- шаги запуска: что уже есть и что осталось -->
+{% set has_teams = teams|length > 0 %}
+{% set has_staff = teams|selectattr('mentors')|list|length == teams|length and has_teams %}
+{% set synced_ok = sync and sync.ok %}
+{% if fourday %}
+<ol class="steps">
+  <li class="{{ 'is-done' if f.start }}"><b>Даты</b> — дни 4-дневного мастермайнда</li>
+  <li class="{{ 'is-done' if join_invites }}"><b><a href="#invites">Одноразовые ссылки</a></b> — по ссылке на человека, отправляете сами</li>
+  <li class="{{ 'is-done' if fd_people }}"><b><a href="#join">Пустить</a></b> — зарегистрировался — пускаете, появляется карточка</li>
+  <li><b>Разборы</b> — запись разбора в карточке → выжимка и черновик целей</li>
+  <li><b>Декларации</b> — «Подготовить к подписи» и печать в карточке</li>
+  <li><b>Переход в ММ8</b> — после 4 дней: «Идёт в ММ8» и «Перевести»</li>
+</ol>
+{% else %}
+<ol class="steps">
+  <li class="{{ 'is-done' if f.start }}"><b>Даты потока</b> — нужны для «день N из M» в обзоре</li>
+  <li class="{{ 'is-done' if has_teams }}"><b>Команды</b> — с Google-таблицей деклараций или на платформе (без ссылки)</li>
+  <li class="{{ 'is-done' if has_staff }}"><b>Менторы у каждой команды</b> — ментор видит только своих</li>
+  <li class="{{ 'is-done' if synced_ok and has_teams }}"><b>Таблицы читаются</b> — нажмите «Обновить сейчас» и проверьте участников</li>
+  <li class="{{ 'is-done' if flow_chats }}"><b><a href="#chats">Чаты потока</a></b> — подключить аккаунт сообщества и задать чатам роли</li>
+  <li class="{{ 'is-done' if f.is_current }}"><b>Сделать текущим</b> — в день старта</li>
+</ol>
+{% endif %}
+
+<div class="surface actions">
+  {% if f.status != 'завершён' %}
+  <form method="post" action="/flows/{{ f.id }}/sync"><button {{ 'disabled' if not has_teams }}>Обновить таблицы сейчас</button></form>
+  {% if not f.is_current %}
+  <form method="post" action="/flows/{{ f.id }}/state"><input type="hidden" name="action" value="current">
+    <button>Сделать текущим</button></form>
+  {% endif %}
+  <form method="post" action="/flows/{{ f.id }}/state"
+        onsubmit="return confirm('Завершить {{ f.name }}? Таблицы перестанут читаться, данные останутся в архиве. Вернуть можно.')">
+    <input type="hidden" name="action" value="finish"><button class="quiet">Завершить поток</button></form>
+  {% else %}
+  <form method="post" action="/flows/{{ f.id }}/state"><input type="hidden" name="action" value="reopen">
+    <button class="quiet">Вернуть в работу</button></form>
+  {% endif %}
+  {% if not people %}
+  <form method="post" action="/flows/{{ f.id }}/delete" onsubmit="return confirm('Удалить поток {{ f.name }}? В нём пока нет участников.')">
+    <button class="quiet">Удалить поток</button></form>
+  {% endif %}
+  <a class="more" href="/participants?flow={{ f.name|urlencode }}">Участники потока</a>
+  {% if f.status != 'готовится' %}<a class="more" href="/flow?flow={{ f.name|urlencode }}">Динамика</a>{% endif %}
+</div>
+
+{% if fourday %}
+<div class="section" id="fourday"><h2>Участники 4-дневного мастермайнда</h2>
+  <p>Команд и менторов здесь нет. Участники приходят по одноразовым ссылкам (раздел «Ссылки и заявки» ниже) —
+    вы их пускаете, и появляется карточка. После 4 дней отметьте, кто идёт в основной ММ8, и переведите их — вместе с декларацией</p></div>
+{% if fd_sheet %}
+<div class="surface">
+  <form class="filters" method="post" action="/flows/{{ f.id }}/fourday" style="margin:0">
+    <input type="hidden" name="action" value="sheet">
+    <label class="grow">Таблица участников (Google)<input name="sheet" value="{{ 'https://docs.google.com/spreadsheets/d/' ~ fd_sheet if fd_sheet else '' }}" placeholder="ссылка на таблицу"></label>
+    <button class="quiet" type="submit">Сохранить</button>
+  </form>
+  <form method="post" action="/flows/{{ f.id }}/fourday" style="margin-top:var(--space-2xs)">
+    <input type="hidden" name="action" value="sync"><button type="submit">Обновить из таблицы</button>
+    {% if sync %}<span class="tag"> · {{ sync.message }} · {{ sync.at|stamp }}</span>{% endif %}
+  </form>
+</div>
+{% endif %}
+{% set fd_in = fd_people|selectattr('status', 'equalto', 'в потоке')|list %}
+<form method="post" action="/flows/{{ f.id }}/fourday" id="fd-transfer">
+<input type="hidden" name="action" value="transfer">
+<div class="surface surface--flush scroll">
+<table class="fdtable">
+  <thead><tr><th></th><th>Участник</th><th>Телеграм</th><th>Разбор</th><th>Декларация</th><th>Идёт в ММ8</th></tr></thead>
+  <tbody>
+  {% for m in fd_people %}
+  <tr class="{{ 'is-left' if m.status != 'в потоке' }}">
+    <td>{% if m.status == 'в потоке' and not m.moved_to %}<input type="checkbox" name="pids" value="{{ m.id }}" aria-label="Перевести {{ m.name }}">{% endif %}</td>
+    <td class="fdwho">{% if m.photo %}<img src="/avatar/{{ m.card }}" alt="" width="32" height="32" loading="lazy">{% else %}<span class="fdini">{{ m.name[:1] }}</span>{% endif %}
+      <a href="/participants/{{ m.card }}">{{ m.name }}</a>{% if m.status != 'в потоке' %} <span class="tag">{{ m.status }}</span>{% endif %}</td>
+    <td class="tag">{% if m.tg_user_id %}✓ {{ '@' ~ m.username if m.username else 'связан' }}{% elif m.username %}ждём @{{ m.username }}{% else %}—{% endif %}</td>
+    <td class="tag">{{ m.review or '—' }}</td>
+    <td class="tag">{{ m.sign or '—' }}</td>
+    <td>{% if m.moved %}<span class="state">перешёл · {{ m.moved.flow }}{% if m.moved.title %}, {{ m.moved.title.split('—')[0] }}{% endif %}</span>
+      {% elif m.status == 'в потоке' %}
+      <select name="nx-{{ m.id }}" data-pid="{{ m.id }}" class="fdnext" aria-label="Идёт в ММ8: {{ m.name }}">
+        <option value="" {{ 'selected' if not m.next_flow }}>—</option>
+        {% for o in ['да', 'думает', 'нет'] %}<option value="{{ o }}" {{ 'selected' if m.next_flow == o }}>{{ o }}</option>{% endfor %}
+      </select>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">Участников пока нет — создайте одноразовые ссылки в разделе «Ссылки и заявки» и пустите тех, кто зарегистрируется.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="surface filters" style="align-items:end">
+  <span class="tag">В потоке: {{ fd_in|length }} · идут в ММ8: {{ fd_in|selectattr('next_flow', 'equalto', 'да')|list|length }} · перешли: {{ fd_people|selectattr('moved_to')|list|length }}</span>
+  <button type="button" class="quiet" id="fd-pick-yes">Отметить «да»</button>
+  <label>Перевести отмеченных в<select name="team" required><option value="">— команда основного потока —</option>
+    {% for t in fd_targets %}<option value="{{ t.id }}">{{ t.flow }} · {{ t.title }}</option>{% endfor %}</select></label>
+  <button type="submit" data-confirm="Перевести отмеченных в основной поток? Их декларации перейдут вместе с ними.">Перевести</button>
+</div>
+</form>
+<details class="surface">
+  <summary><b>Добавить участника вручную</b> — если его нет в таблице</summary>
+  <form class="filters" method="post" action="/flows/{{ f.id }}/fourday" style="margin-top:var(--space-sm)">
+    <input type="hidden" name="action" value="add">
+    <label class="grow">Фамилия Имя<input name="name" required></label>
+    <label>@ник<input name="username" placeholder="@ivanov"></label>
+    <label>Телефон<input name="phone" inputmode="tel"></label>
+    <button type="submit">Добавить</button>
+  </form>
+</details>
+<script>
+document.querySelectorAll(".fdnext").forEach(sel => sel.addEventListener("change", () => {
+  const body = new FormData(); body.append("action", "next"); body.append("pid", sel.dataset.pid); body.append("value", sel.value);
+  fetch("/flows/{{ f.id }}/fourday", { method: "POST", body, credentials: "same-origin" });
+}));
+document.getElementById("fd-pick-yes")?.addEventListener("click", () => {
+  document.querySelectorAll(".fdnext").forEach(sel => {
+    const box = sel.closest("tr").querySelector('input[name="pids"]'); if (box) box.checked = sel.value === "да";
+  });
+});
+</script>
+{% else %}
+<div class="section"><h2>Команды</h2>
+  <p>Команда ведётся либо в Google-таблице (по листу на участника по шаблону декларации, открыта по ссылке на чтение),
+    либо прямо на платформе — тогда ссылку не указывайте</p></div>
+
+{% for t in teams %}
+<details class="surface teamedit">
+  <summary>
+    <b>{{ t.title }}</b>
+    <span class="tag">{{ t.mentors|map(attribute='name')|join(', ') or 'менторы не выбраны' }}{% if t.trackers %} · трекер {{ t.trackers|map(attribute='name')|join(', ') }}{% endif %}{% if t.goal %} · цель {{ t.goal }} вовлечённых{% endif %}</span>
+    {% if not t.mentors %}<span class="state state--quiet">нет ментора</span>{% endif %}
+  </summary>
+  <form class="form" method="post" action="/flows/{{ f.id }}/teams/{{ t.id }}">
+    <div class="row2">
+      <label>Название<input name="title" value="{{ t.title }}" required></label>
+      <label>Номер<input name="no" value="{{ t.no or '' }}" inputmode="numeric" style="max-width:6rem"></label>
+      <label>Цель по вовлечённым<input name="goal" type="number" min="1" max="10000" value="{{ t.goal or '' }}" style="max-width:8rem" placeholder="не задана"></label>
+    </div>
+    {% if t.sheet_id %}
+    <label>Таблица деклараций
+      <input name="link" value="https://docs.google.com/spreadsheets/d/{{ t.sheet_id }}"></label>
+    <p class="tag" style="margin:0"><a href="https://docs.google.com/spreadsheets/d/{{ t.sheet_id }}" target="_blank" rel="noopener">открыть таблицу</a></p>
+    {% else %}
+    <p class="tag" style="margin:0">Ведётся на платформе: декларации, шаги, вовлечения и деньги правятся в карточках участников.</p>
+    {% endif %}
+    <div class="row2">
+      <div class="field"><span>Менторы</span>{{ staff_select('mentors', t.mentors|map(attribute='id')|list) }}</div>
+      <div class="field"><span>Трекер</span>{{ staff_select('trackers', t.trackers|map(attribute='id')|list) }}</div>
+    </div>
+    <div style="display:flex;gap:var(--space-2xs);flex-wrap:wrap">
+      <button type="submit">Сохранить</button>
+      <button type="submit" class="quiet" formaction="/flows/{{ f.id }}/teams/{{ t.id }}/remove"
+              onclick="return confirm('Убрать «{{ t.title }}» из потока? Участники пропадут из списков после обновления таблиц.')">Убрать из потока</button>
+    </div>
+  </form>
+  {% if not t.sheet_id %}
+  <div class="teamedit__people" id="team-{{ t.id }}">
+    <p style="margin:var(--space-sm) 0 var(--space-2xs)"><b>Участники</b></p>
+    {% set mem = native_people.get(t.id, []) %}
+    {% if mem %}<ul style="margin:0 0 var(--space-sm);padding-left:1.1rem">{% for m in mem %}
+      <li><a href="/participants/{{ m.card }}">{{ m.name }}</a>{% if m.status != 'в потоке' %} <span class="tag">{{ m.status }}</span>{% endif %}
+        <span class="tag">· целей {{ m.goals_total or 0 }} · {{ ((m.progress or 0) * 100)|round|int }}%</span>
+        {% if m.tg_user_id %}<span class="tag">· телеграм связан{% if m.username %} @{{ m.username }}{% endif %}</span>
+        {% elif personal_links.get(m.id) %}<span class="joinlink"><input readonly value="{{ base_url }}/join/{{ personal_links[m.id] }}" onclick="this.select()" aria-label="Личная ссылка {{ m.name }}"></span>
+        {% elif join_ready %}<form method="post" action="/flows/{{ f.id }}/join" class="inline"><input type="hidden" name="action" value="personal">
+          <input type="hidden" name="pid" value="{{ m.id }}"><button class="quiet stepdel" style="opacity:1">личная ссылка</button></form>{% endif %}</li>{% endfor %}</ul>
+    {% else %}<p class="tag" style="margin:0 0 var(--space-sm)">Пока никого.</p>{% endif %}
+    <form class="filters" method="post" action="/decl/team/{{ t.id }}/person" style="margin:0">
+      <label class="grow">Фамилия Имя<input name="name" required placeholder="Иванов Иван"></label>
+      <label>Ник в телеграме<input name="username" placeholder="@ivanov"></label>
+      <label>Планка<input name="planka" type="number" min="0" max="50" value="3" style="max-width:5rem"></label>
+      <button type="submit">Добавить участника</button>
+    </form>
+  </div>
+  {% endif %}
+</details>
+{% else %}
+<div class="surface"><p style="margin:0">Команд пока нет.</p></div>
+{% endfor %}
+
+{% endif %}
+<div class="section" id="join"><h2>Ссылки и заявки</h2>
+  <p>Менеджер присылает участнику ссылку сам. Участник нажимает «Войти через Telegram» — у платформы появляется его телеграм.
+    Общая ссылка — заявка, доступ открывает ассистент; личная — одноразовая, сразу в карточку</p></div>
+{% if not join_ready %}
+<div class="surface"><p style="margin:0">Вход через Telegram ещё не настроен: администратор указывает бот-ключ в «Управление» → «Телеграм».</p></div>
+{% else %}
+<div class="surface" id="invites">
+  <p style="margin:0 0 var(--space-2xs)"><b>Одноразовые ссылки</b> <span class="tag">— по ссылке на человека; зарегистрироваться можно один раз, пускаете вы</span></p>
+  <form class="filters filters--stack" method="post" action="/flows/{{ f.id }}/join" style="margin:0">
+    <input type="hidden" name="action" value="invites">
+    <label class="grow">Кому — по строке на человека (видите только вы)<textarea name="note" rows="3" placeholder="Иванов Иван&#10;Петрова Анна"></textarea></label>
+    <label>или просто сколько<input name="count" type="number" min="1" max="200" style="max-width:6rem"></label>
+    <button type="submit">Создать ссылки</button>
+  </form>
+  {% if join_invites %}
+  <div class="scroll" style="margin-top:var(--space-sm)"><table>
+    <thead><tr><th>Кому</th><th>Ссылка</th><th>Что с ней</th><th></th></tr></thead>
+    <tbody>{% for ln in join_invites %}
+      <tr><td>{{ ln.note or '—' }}</td>
+        <td class="joinlink"><input readonly value="{{ base_url }}/join/{{ ln.token }}" onclick="this.select()" aria-label="Ссылка {{ ln.note or '' }}"></td>
+        <td class="tag">{% if not ln.used_at %}ещё не открывали
+          {% elif ln.req and ln.req.status == 'ждёт' %}<b>ждёт, пока пустите</b> — {{ ln.req.full_name or ln.req.first_name }}{% if ln.req.username %} @{{ ln.req.username }}{% endif %}
+          {% elif ln.req %}{{ ln.req.status }} — {{ ln.req.full_name or ln.req.first_name }}{% else %}использована{% endif %}</td>
+        <td>{% if not ln.used_at %}<form method="post" action="/flows/{{ f.id }}/join" class="inline"><input type="hidden" name="action" value="invite_off">
+          <input type="hidden" name="token" value="{{ ln.token }}"><button class="quiet stepdel" title="Отозвать ссылку" data-confirm="Отозвать эту ссылку?">×</button></form>{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% endif %}
+</div>
+
+<details class="surface">
+  <summary><b>Общая ссылка на поток</b> <span class="tag">— одна на всех; каждый вход — заявка</span></summary>
+  {% if join_link %}
+  <div class="joinlink"><input readonly value="{{ base_url }}/join/{{ join_link.token }}" onclick="this.select()" aria-label="Общая ссылка"></div>
+  <p class="tag" style="margin:var(--space-3xs) 0 var(--space-xs)">создана {{ join_link.created_at|d }} · @{{ join_link.created_by }}</p>
+  {% else %}<p class="tag" style="margin:0 0 var(--space-xs)">Ссылки нет.</p>{% endif %}
+  <div style="display:flex;gap:var(--space-2xs);flex-wrap:wrap">
+    <form method="post" action="/flows/{{ f.id }}/join"><input type="hidden" name="action" value="link_new">
+      <button class="{{ 'quiet' if join_link }}" {% if join_link %}data-confirm="Сделать новую ссылку? Прежняя перестанет работать."{% endif %}>{{ 'Сменить ссылку' if join_link else 'Создать ссылку' }}</button></form>
+    {% if join_link %}<form method="post" action="/flows/{{ f.id }}/join"><input type="hidden" name="action" value="link_off">
+      <button class="quiet" data-confirm="Выключить общую ссылку? По ней больше нельзя будет подать заявку.">Выключить</button></form>{% endif %}
+  </div>
+</details>
+
+<div class="surface">
+  <p style="margin:0 0 var(--space-2xs)"><b>Заявки на доступ</b> {% if join_pending %}<span class="pill pill--accent">{{ join_pending|length }}</span>{% endif %}</p>
+  {% for r in join_pending %}
+  <div class="joinreq">
+    <div class="joinreq__who">
+      {% if r.photo_url %}<img src="{{ r.photo_url }}" alt="" width="40" height="40" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+      <div><b>{{ r.full_name or (r.first_name ~ ' ' ~ (r.last_name or '')) }}</b>
+        <span class="tag">{% if r.username %}@{{ r.username }} · {% endif %}{{ r.first_name }} {{ r.last_name or '' }} в телеграме{% if r.phone %} · тел. {{ r.phone }}{% endif %} · {{ r.created_at|stamp }}</span>
+        {% if r.guess %}<span class="tag">похоже: <b>{{ r.guess.name }}</b>{% if r.guess.team %} ({{ r.guess.team }}){% endif %}</span>{% endif %}</div>
+    </div>
+    <form class="filters" method="post" action="/flows/{{ f.id }}/join" style="margin:0">
+      <input type="hidden" name="action" value="approve"><input type="hidden" name="rid" value="{{ r.id }}">
+      {% if not fourday %}
+      <label>Это участник<select name="person"><option value="">— новый —</option>
+        {% for p in r.free %}<option value="{{ p.id }}" {{ 'selected' if r.guess and r.guess.id == p.id }}>{{ p.name }}{% if p.team %} · {{ p.team.split('—')[0] }}{% endif %}</option>{% endfor %}</select></label>
+      <label>Новый — в команду<select name="team"><option value="">—</option>
+        {% for t in teams if not t.sheet_id %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <button type="submit">Пустить</button>
+      <button type="submit" class="quiet" formaction="/flows/{{ f.id }}/join" name="action" value="reject" data-confirm="Отклонить заявку?">Отклонить</button>
+    </form>
+  </div>
+  {% else %}<p class="tag" style="margin:0">Новых заявок нет.</p>{% endfor %}
+  {% if join_done %}
+  <details class="goaledit"><summary>Разобранные: {{ join_done|length }}</summary>
+    <ul class="signbox__list">{% for r in join_done %}<li>{{ r.full_name or r.first_name }}{% if r.username %} @{{ r.username }}{% endif %}
+      <span class="tag">· {{ r.status }}{% if r.person %} → {{ r.person }}{% endif %} · @{{ r.decided_by }} {{ r.decided_at|stamp }}</span></li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not fourday %}
+<div class="section"><h2>Добавить команду</h2><p>Вставьте ссылку на таблицу и нажмите «Проверить» — платформа покажет, кого нашла</p></div>
+<form class="form surface" method="post" action="/flows/{{ f.id }}/teams" id="add-team">
+  <div class="row2">
+    <label>Название<input name="title" value="{{ form.title or '' }}" placeholder="Команда 5 — Имя и Имя"></label>
+    <label>Номер<input name="no" value="{{ form.no or '' }}" inputmode="numeric" style="max-width:6rem" placeholder="авто"></label>
+  </div>
+  <label>Ссылка на Google-таблицу<input name="link" value="{{ form.link or '' }}" placeholder="пусто — команда ведётся на платформе"></label>
+  <div class="row2">
+    <div class="field"><span>Менторы</span>{{ staff_select('mentors', form.mentors or []) }}</div>
+    <div class="field"><span>Трекер</span>{{ staff_select('trackers', form.trackers or []) }}</div>
+  </div>
+
+  {% if check %}
+  <div class="check {{ 'check--ok' if check.ok else 'check--bad' }}">
+    {% if check.ok %}
+    <p style="margin:0"><b>Таблица читается.</b> Нашлось участников: {{ check.people|length }}{% if check.skipped %} · пропущены листы: {{ check.skipped|join(', ') }}{% endif %}</p>
+    <ul>{% for p in check.people %}<li>{{ p.name }}{% if p.left %} <span class="tag">выбыл</span>{% endif %} — целей {{ p.goals }}, шагов {{ p.steps }}{% if p.progress is not none %}, выполнено {{ (p.progress * 100)|round|int }}%{% endif %}</li>{% endfor %}</ul>
+    {% for w in check.warnings %}<p class="tag" style="margin:0">⚠ {{ w }}</p>{% endfor %}
+    {% else %}
+    <p style="margin:0"><b>Не получилось.</b> {{ check.error }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:var(--space-2xs);flex-wrap:wrap">
+    <button type="submit" name="action" value="check" class="{{ 'quiet' if check and check.ok }}">Проверить таблицу</button>
+    <button type="submit" name="action" value="add" class="{{ '' if check and check.ok else 'quiet' }}">Добавить команду</button>
+  </div>
+</form>
+
+<details class="surface" style="margin-top:var(--space-md)">
+  <summary><b>Нового ментора нет в списке?</b> Заведите его здесь</summary>
+  <form class="form" method="post" action="/flows/{{ f.id }}/staff" style="margin-top:var(--space-sm);max-width:var(--measure)">
+    <label>Имя и фамилия<input name="name" required></label>
+    <label>Логин — его ник в телеграме<input name="login" placeholder="ivan_petrov" required></label>
+    <button type="submit">Завести ментора</button>
+  </form>
+</details>
+
+{% endif %}
+
+{% macro chat_role(cid, tid, cur, none_label='Не относится к потоку') %}
+<select name="chat" class="chatrole" aria-label="Роль">
+  <option value="">{{ none_label }}</option>
+  <option value="{{ cid }}:{{ tid }}|поток" {{ 'selected' if cur and cur.kind == 'поток' }}>Участники — весь поток</option>
+  {% for t in teams %}
+  <option value="{{ cid }}:{{ tid }}|команда|{{ t.id }}" {{ 'selected' if cur and cur.kind == 'команда' and cur.team_id == t.id }}>Участники — {{ t.title.split('—')[0].strip() }}</option>
+  {% endfor %}
+  <option value="{{ cid }}:{{ tid }}|организаторы" {{ 'selected' if cur and cur.kind == 'организаторы' }}>Организаторы и менторы</option>
+  <option value="{{ cid }}:{{ tid }}|отчёты" {{ 'selected' if cur and cur.kind == 'отчёты' }}>Отчёты участников</option>
+  <option value="{{ cid }}:{{ tid }}|чеки" {{ 'selected' if cur and cur.kind == 'чеки' }}>Чеки и оплаты</option>
+</select>
+{% endmacro %}
+
+<div class="section" id="chats"><h2>Чаты потока</h2>
+  <p>Платформа читает чаты через телеграм-аккаунт сообщества. Каждому чату задайте роль — от неё зависит,
+    как читаются сообщения: в чатах участников считается их вовлечение и собирается портрет,
+    организаторские — служебные, участникам в зачёт не идут</p></div>
+
+{% if not tg_st.ok and not tg_st.connected %}
+<div class="surface"><p style="margin:0">{{ tg_st.error or 'Подключать аккаунт и выбирать чаты могут координатор и администратор.' }}</p></div>
+
+{% elif tg_st.connected %}
+<div class="surface tgacc">
+  <div>
+    <b>Читает аккаунт: {{ tg_st.name }}</b>{% if tg_st.username %} <span class="tag">@{{ tg_st.username }}</span>{% endif %}
+    <p class="tag" style="margin:var(--space-3xs) 0 0">{{ tg_chats | length }} групп и каналов{% if tg_at %} · список от {{ tg_at[:16].replace('T', ' ') }}{% endif %}.
+      Нужного чата нет — добавьте аккаунт в чат и обновите список</p>
+  </div>
+  <div class="tgacc__actions">
+    <form method="post" action="/telegram/chats"><input type="hidden" name="back" value="/flows/{{ f.id }}"><button class="quiet">Обновить список</button></form>
+    <form method="post" action="/telegram/logout" onsubmit="return confirm('Отключить аккаунт от платформы? Чтение чатов всех потоков остановится, выбор чатов сохранится.')">
+      <input type="hidden" name="back" value="/flows/{{ f.id }}"><button class="quiet">Отключить аккаунт</button></form>
+  </div>
+</div>
+
+<form class="surface surface--flush chatroles" method="post" action="/flows/{{ f.id }}/chats">
+  <div class="chatroles__bar">
+    <input type="search" class="chatroles__find" placeholder="Найти чат по названию" aria-label="Найти чат">
+    <label class="chatroles__only"><input type="checkbox" class="chatroles__picked"> только выбранные</label>
+    <label class="chatroles__only" title="В каналах пишут только админы — чаты потока почти всегда группы"><input type="checkbox" class="chatroles__channels"> показать и каналы ({{ tg_chats | selectattr('kind', 'equalto', 'канал') | list | length }})</label>
+    <span class="tag chatroles__count"></span>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Чат</th><th class="num">Людей</th><th>Последнее</th><th>Роль в {{ f.name }}</th></tr></thead>
+    <tbody>
+    {% set ns = namespace(ids=[]) %}
+    {% for c in tg_chats %}{% set ns.ids = ns.ids + [c.id] %}
+    <tr data-title="{{ c.title | lower }}" data-channel="{{ 1 if c.kind == 'канал' else 0 }}" data-group="{{ c.id }}"{% if c.topics %} class="is-forum"{% endif %}>
+      <td>{{ c.title }}<span class="sub">{{ c.kind }}{% if c.topics %} с темами · {{ c.topics | length }}{% endif %}{% if elsewhere.get(c.id) %} · уже в {{ elsewhere[c.id] | join(', ') }}{% endif %}</span></td>
+      <td class="num">{{ c.members or '—' }}</td>
+      <td class="nowrap">{{ c.last[:10] | d if c.last else '—' }}</td>
+      <td>{{ chat_role(c.id, 0, bound.get((c.id, 0)), 'Вся группа: не относится' if c.topics else 'Не относится к потоку') }}</td>
+    </tr>
+    {% for t in c.topics or [] %}
+    <tr class="topicrow" data-title="{{ (c.title ~ ' ' ~ t.title) | lower }}" data-channel="0" data-parent="{{ c.id }}">
+      <td><span class="topicrow__name"># {{ t.title }}</span>{% if t.closed %}<span class="sub">закрыта</span>{% endif %}</td>
+      <td></td><td></td>
+      <td>{{ chat_role(c.id, t.id, bound.get((c.id, t.id)), 'как вся группа') }}</td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    {% for key, b in bound.items() if key[0] not in ns.ids %}
+    <tr data-title="{{ (b.title or '') | lower }}" data-channel="0">
+      <td>{{ b.title or key[0] }}{% if b.topic_title %} › {{ b.topic_title }}{% endif %}<span class="sub" style="color:var(--color-accent)">аккаунта больше нет в этом чате — читать нечего</span></td>
+      <td class="num">—</td><td>—</td>
+      <td>{{ chat_role(key[0], key[1], b) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="chatroles__save">
+    <button type="submit">Сохранить чаты</button>
+    <span class="tag">Сохраняются только чаты с ролью; остальные платформа не читает. В группе с темами роль темы важнее роли всей группы</span>
+  </div>
+</form>
+
+{% else %}
+<div class="surface tglogin" style="max-width:var(--measure)">
+  <p style="margin-top:0">Аккаунт сообщества ещё не подключён. Подключите тот аккаунт, который состоит в чатах потока —
+    обычно это аккаунт ассистента. Аккаунт остаётся у владельца и работает как раньше; платформа только читает.</p>
+  <ol class="steps tglogin__steps">
+    <li class="{{ 'is-done' if tg_st.waiting_code }}"><b>Номер</b>
+      <form class="filters" method="post" action="/telegram/phone">
+        <input type="hidden" name="back" value="/flows/{{ f.id }}">
+        <input name="phone" placeholder="+7 900 000-00-00" value="{{ tg_st.phone_sent or '' }}" required inputmode="tel">
+        <button class="{{ 'quiet' if tg_st.waiting_code }}">{{ 'Прислать код ещё раз' if tg_st.waiting_code else 'Получить код' }}</button>
+      </form></li>
+    <li class="{{ 'is-done' if tg_st.need_password }}"><b>Код из телеграма</b>
+      {% if tg_st.waiting_code and not tg_st.need_password %}
+      <p>Код пришёл в приложение Телеграм этого аккаунта, в чат «Telegram». <b>Введите его здесь и никому не пересылайте в телеграме</b> —
+        пересланный код телеграм сразу гасит. Если аккаунт у другого человека, пусть продиктует код голосом.</p>
+      <form class="filters" method="post" action="/telegram/code">
+        <input type="hidden" name="back" value="/flows/{{ f.id }}">
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" required autofocus>
+        <button>Подтвердить</button>
+      </form>
+      {% endif %}</li>
+    <li><b>Облачный пароль</b> — только если на аккаунте включена двухэтапная проверка
+      {% if tg_st.need_password %}
+      <p>Код принят. Нужен облачный пароль (Настройки → Конфиденциальность → Облачный пароль). Платформа его не хранит.</p>
+      <form class="filters" method="post" action="/telegram/code">
+        <input type="hidden" name="back" value="/flows/{{ f.id }}">
+        <input name="password" type="password" required autofocus autocomplete="off">
+        <button>Подключить</button>
+      </form>
+      {% endif %}</li>
+    <li><b>Роли чатов</b> — после входа здесь появится список всех групп аккаунта</li>
+  </ol>
+</div>
+{% endif %}
+
+{% if rep_chats %}
+<div class="section" id="reports"><h2>Чат отчётов</h2>
+  <p>Отчёты участников за день считаются по этому чату — видно в «Обзоре» (кому нужна помощь, календарь), в «Участниках»
+    и в карточках. Платформа только читает чат, сама дочитывает его каждое утро, а в «Постах» кладёт черновик «отчёты за вчера»</p></div>
+<div class="surface tgacc">
+  <div>{% for x in rep_chats %}<b>{{ x.c.title }}</b> <span class="tag">{% if x.read %}прочитан {{ x.read.at | stamp }}{% if not x.read.ok %} — ошибка: {{ x.read.note }}{% endif %}{% else %}ещё не читался{% endif %}</span>{{ '; ' if not loop.last }}{% endfor %}</div>
+  <form method="post" action="/reports/fetch" class="tgacc__actions"><input type="hidden" name="flow" value="{{ f.name }}">
+    <button class="quiet">Дочитать сейчас</button></form>
+</div>
+{% if rep_strangers %}
+<div class="surface surface--flush">
+  <p style="margin:0;padding:var(--space-sm) var(--space-md) 0"><b>Пишут отчёты, но не узнаны</b> — отметьте, кто это; платформа запомнит аккаунт</p>
+  <table><tbody>
+  {% for s in rep_strangers %}
+  <tr><td>{{ s.sender or '—' }}{% if s.username %} <span class="tag">@{{ s.username }}</span>{% endif %}<span class="sub">отчётов за 2 недели: {{ s.n }}</span></td>
+    <td><form method="post" action="/reports/who" class="whoform">
+      <input type="hidden" name="flow" value="{{ f.name }}"><input type="hidden" name="sender_id" value="{{ s.sender_id }}">
+      <select name="card" onchange="this.form.submit()"><option value="">кто это?</option><option value="-">не участник</option>
+        {% for p in rep_people %}<option value="{{ p.card }}">{{ p.name }}</option>{% endfor %}</select>
+    </form></td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="section" id="disk"><h2>Разборы с Яндекс Диска</h2>
+  <p>Вставьте ссылку на папку с разборами (можно на весь зал — папки дней платформа обойдёт сама). Она найдёт папки
+    «N РАЗБОР Фамилия Имя» и сопоставит с участниками потока. Берётся только звук, видео не скачивается. Записи качаются
+    по одной и сразу уходят в разбор: расшифровка, выжимка, черновик декларации в карточке.</p></div>
+<form class="form surface" method="post" action="/flows/{{ f.id }}/disk" style="max-width:var(--measure)">
+  <input type="hidden" name="action" value="scan">
+  <label>Ссылка на папку<input name="url" type="url" required placeholder="https://disk.yandex.ru/d/…"></label>
+  <button>Найти разборы</button>
+</form>
+{% if disk %}
+<p class="tag">{% for k, v in disk_stats.items() %}{{ k }}: {{ v }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+<form method="post" action="/flows/{{ f.id }}/disk" class="surface surface--flush" id="disk-pick">
+  <input type="hidden" name="action" value="pick">
+  <table>
+    <thead><tr><th></th><th>Папка</th><th>Участник</th><th>Состояние</th></tr></thead>
+    <tbody>
+    {% for d in disk %}
+    {% set free = d.status in ('найден', 'пропущен', 'ошибка') %}
+    <tr>
+      <td>{% if free %}<input type="checkbox" name="go-{{ d.id }}" value="1" aria-label="Загрузить {{ d.folder }}"
+            {{ 'checked' if d.match in ('точно', 'похоже') and d.status == 'найден' }}>{% endif %}</td>
+      <td>{{ d.folder }}<span class="sub">{{ d.day or '' }}{% if d.size %} · {{ '%.1f' | format(d.size / 1e9) }} ГБ{% endif %}</span></td>
+      <td>{% if free %}
+        <select name="p-{{ d.id }}" aria-label="Кто на разборе {{ d.folder }}">
+          <option value="">— кто это? —</option>
+          {% for p in disk_people %}<option value="{{ p.id }}" {{ 'selected' if p.id == d.person_id }}>{{ p.name }}</option>{% endfor %}
+        </select>
+        {% if d.match == 'похоже' and d.status == 'найден' %}<span class="sub">похоже — проверьте</span>
+        {% elif d.match == 'нет' and not d.person_id %}<span class="sub">не узнан</span>{% endif %}
+        {% else %}{% if d.person_id %}<a href="/participants/{{ -d.person_id }}#razbory">{{ d.person }}</a>{% endif %}{% endif %}</td>
+      <td>{% if d.status == 'передан' %}{{ {'готов': 'готово', 'ошибка': 'ошибка разбора'}.get(d.r_status, d.r_status) }}{% if d.r_error and d.r_status != 'готов' %}<span class="sub">{{ d.r_error }}</span>{% endif %}
+        {% else %}{{ d.status }}{% if d.error %}<span class="sub">{{ d.error }}</span>{% endif %}{% endif %}
+        {% if free %}<button class="quiet" form="disk-forget-{{ d.id }}" title="Убрать из списка">×</button>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p style="padding:0 var(--space-md) var(--space-sm)"><button>Загрузить отмеченные</button>
+    <span class="tag">Отмечены узнанные. Неузнанных выберите в списке и отметьте галочкой.</span></p>
+</form>
+{% for d in disk if d.status in ('найден', 'пропущен', 'ошибка') %}
+<form method="post" action="/flows/{{ f.id }}/disk" id="disk-forget-{{ d.id }}" hidden>
+  <input type="hidden" name="action" value="forget"><input type="hidden" name="item" value="{{ d.id }}"></form>
+{% endfor %}
+{% endif %}
+
+<div class="section"><h2>Название и даты</h2></div>
+<form class="form surface" method="post" action="/flows/{{ f.id }}/settings" style="max-width:var(--measure)">
+  <label>Название<input name="name" value="{{ f.name }}" required maxlength="40"></label>
+  <div class="row2">
+    <label>Старт<input type="date" name="start" value="{{ f.start or '' }}"></label>
+    <label>Финиш<input type="date" name="finish" value="{{ f.finish or '' }}"></label>
+  </div>
+  <label>Заметка<textarea name="note" rows="2">{{ f.note or '' }}</textarea></label>
+  <button type="submit">Сохранить</button>
+</form>
+<script src="/static/chatroles.js?v={{ v }}" defer></script>
+<script src="/static/posts.js?v={{ v }}" defer></script>
+{% endblock %}

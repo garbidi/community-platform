@@ -1,0 +1,37 @@
+{# Вовлечённые на «Обзоре»: всего по потоку и по командам — видно всем ролям. #}
+{% if inv and inv.teams %}
+  <div class="section"><h2>Вовлечённые</h2>
+    <p>Всего по потоку {{ inv_flow }} и по командам{% if inv.week %} · +{{ inv.week }} за неделю{% endif %}</p></div>
+  <div class="figures">
+    <div><div class="figure__n">{{ inv.done }}{% if inv.goal %}<small> / {{ inv.goal }}</small>{% endif %}</div>
+      <div class="figure__k">вовлечено{% if inv.goal %} из суммы целей команд{% endif %}</div></div>
+    <div><div class="figure__n">+{{ inv.week }}</div>
+      <div class="figure__k">за неделю, {{ inv.from | d }}–{{ inv.to | d }}</div></div>
+    {% if inv.goal %}
+    <div class="{{ 'figure--flag' if inv.goal > inv.done }}"><div class="figure__n">{{ [inv.goal - inv.done, 0] | max }}</div>
+      <div class="figure__k">осталось до целей</div></div>
+    {% endif %}
+  </div>
+  <ol class="board">
+    {% for t in inv.teams %}
+    {% set own = t.id in (inv_mine or []) %}
+    <li class="surface board__row{{ ' is-mine' if own }}{{ ' is-first' if t.place == 1 }}{{ ' is-nogoal' if not t.goal }}"
+        style="--fill:{{ (t.fill * 100) | round(1) }}%">
+      <div class="board__place">{{ t.place or '—' }}</div>
+      <div class="board__who">
+        <h3>{{ t.title }}{% if own %} <span class="pill pill--accent">ваша команда</span>{% endif %}</h3>
+        <p class="tag">{{ t.mentors | join(', ') or 'менторы не выбраны' }} · {{ t.people }} чел.</p>
+      </div>
+      <div class="board__track">
+        {% if t.goal %}
+        <div class="board__bar" role="img" aria-label="{{ t.done }} из {{ t.goal }}"><span style="width:{{ (t.share * 100) | round(1) }}%"></span></div>
+        <p class="board__nums"><b>{{ t.done }}</b> из {{ t.goal }}{% if t.left %} <span class="tag">· осталось {{ t.left }}</span>{% else %} <span class="state">цель взята</span>{% endif %}</p>
+        {% else %}
+        <p class="board__nums"><b>{{ t.done }}</b> вовлечено</p>
+        {% endif %}
+      </div>
+      <div class="board__week"><b class="{{ 'is-zero' if not t.week }}">+{{ t.week }}</b><span class="tag">за неделю</span></div>
+    </li>
+    {% endfor %}
+  </ol>
+{% endif %}

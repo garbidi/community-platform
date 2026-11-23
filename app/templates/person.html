@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}{{ person.name }} · Вершина{% endblock %}
+{% block body %}
+{% from "_ava.html" import ava %}
+<div class="head head--ava">
+  {{ ava(p.user_id, person.name, photo, "ava--lg") }}
+  <div>
+  <h1><span class="brace">{</span>{{ person.name }}<span class="brace">}</span></h1>
+  <p class="head__meta">
+    поток {{ person.flow }}
+    {% if person.team_title %} · <a href="/teams/{{ person.team_ref }}">{{ person.team_title }}</a>{% endif %}
+    {% if mentors %} · менторы: {{ mentors | join(', ') }}{% endif %}
+    · <span class="state {{ 'state--lost' if person.status == 'выбыл' }}">{{ person.status }}</span>
+    {% if person.sheet_id and sees_sheet %} · <a href="https://docs.google.com/spreadsheets/d/{{ person.sheet_id }}" target="_blank" rel="noopener">таблица команды</a>{% endif %}
+  </p>
+  </div>
+</div>
+
+<div class="figures">
+  <div><div class="figure__n">{{ ((person.progress or 0) * 100)|round|int }}<small> %</small></div><div class="figure__k">декларация выполнена</div></div>
+  <div><div class="figure__n">{{ person.goals_closed or 0 }}<small> / {{ person.goals_total or goals|length }}</small></div><div class="figure__k">целей закрыто</div></div>
+  <div><div class="figure__n">{{ person.steps_done or 0 }}<small> / {{ person.steps_total or 0 }}</small></div><div class="figure__k">шагов сделано</div></div>
+  <div class="{{ 'figure--flag' if late_total }}"><div class="figure__n">{{ late_total }}</div><div class="figure__k">шагов просрочено</div></div>
+</div>
+
+
+
+{# непроверенные сведения из созвонов и разборов — только тем, кто их принимает; участнику — нет #}
+{% set proposed_n = (info.values() | map(attribute='proposed') | map('length') | sum) if may_edit_info else 0 %}
+<nav class="tabs" role="tablist" aria-label="Разделы карточки" data-tabs>
+  <a href="#t-decl" role="tab" data-tab="decl">Декларация</a>
+  <a href="#t-info" role="tab" data-tab="info">Информация{% if proposed_n %} <span class="badge">{{ proposed_n }}</span>{% endif %}</a>
+  {% if may_analyze %}<a href="#t-reviews" role="tab" data-tab="reviews">Разборы{% if reviews %} <span class="tag">{{ reviews|length }}</span>{% endif %}</a>{% endif %}
+  <a href="#t-goals" role="tab" data-tab="goals">Цели на поток</a>
+  <a href="#t-money" role="tab" data-tab="money">Вовлечение и деньги</a>
+  {% if calls is not none %}<a href="#t-calls" role="tab" data-tab="calls">Созвоны{% if calls %} <span class="tag">{{ calls|length }}</span>{% endif %}</a>{% endif %}
+</nav>
+
+<section class="tabpanel" id="t-decl" data-panel="decl">
+{% if tracker %}{% set tk = tracker %}
+<div class="surface trekker" id="trekker">
+  <div class="trekker__nums">
+    <div><span class="trekker__n">{{ tk.progress }}<small>%</small></span><span class="tag">моя декларация</span></div>
+    {% if tk.team_avg is not none %}<div><span class="trekker__n">{{ tk.team_avg }}<small>%</small></span><span class="tag">в среднем по команде</span></div>{% endif %}
+    <div><span class="trekker__n">{{ tk.steps.done }}<small>/{{ tk.steps.total }}</small></span><span class="tag">шагов сделано</span></div>
+  </div>
+  {% if tk.note %}
+  <div class="trekker__note">
+    <p class="tag" style="margin:0">После встречи {{ tk.note.when[8:10] ~ '.' ~ tk.note.when[5:7] if tk.note.when else '' }} «{{ tk.note.title }}»</p>
+    {% if tk.note.text %}<p style="margin:var(--space-3xs) 0 0">{{ tk.note.text }}</p>{% endif %}
+    {% if tk.note.promises %}<p style="margin:var(--space-2xs) 0 0"><b>Ты пообещал(а):</b> {{ tk.note.promises | join('; ') }}</p>{% endif %}
+  </div>
+  {% endif %}
+  {% if tk.steps.late %}
+  <h3 class="trekker__h">Просрочено</h3>
+  <ul class="dsteps">{% for s in tk.steps.late %}<li>{% if tk.native %}<form method="post" action="/me/steps/{{ s.id }}" class="inline"><button class="stepbox" title="Сделал — отметить" aria-label="Отметить"></button></form>{% endif %}
+    {{ s.title }} <span class="state state--lost">до {{ s.deadline|d }}</span> <span class="tag">{{ s.goal }}</span></li>{% endfor %}</ul>
+  {% endif %}
+  <h3 class="trekker__h">На этой неделе</h3>
+  {% if tk.steps.soon %}
+  <ul class="dsteps">{% for s in tk.steps.soon %}<li>{% if tk.native %}<form method="post" action="/me/steps/{{ s.id }}" class="inline"><button class="stepbox" title="Сделал — отметить" aria-label="Отметить"></button></form>{% endif %}
+    {{ s.title }} <span class="tag">до {{ s.deadline|d }} · {{ s.goal }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="tag" style="margin:0">Шагов со сроком на эту неделю нет{% if tk.steps.undated %} — без срока ещё {{ tk.steps.undated|length }}, они ниже в декларации{% endif %}.</p>{% endif %}
+  {% if tk.native %}<p class="tag" style="margin:var(--space-sm) 0 0">Сделал шаг — отметь квадратик. Ментор увидит и подтвердит.</p>
+  {% else %}<p class="tag" style="margin:var(--space-sm) 0 0">Шаги этого потока отмечаются в таблице команды.</p>{% endif %}
+</div>
+{% endif %}
+{% if rep %}
+<div class="repstrip">
+  <span class="repstrip__k">Отчёты
+    {% if rep.stat %}<b>{{ rep.stat.done }} из {{ rep.stat.of }}</b>{% if rep.stat.miss >= 2 %} · <span class="late">нет {{ rep.stat.miss }} дн. подряд</span>{% elif rep.stat.streak >= 3 %} · {{ rep.stat.streak }} дн. подряд{% endif %}{% endif %}</span>
+  <span class="repstrip__days">
+    {% for x in rep.days %}{% if x.link %}<a class="repday is-ok" href="{{ x.link }}" target="_blank" rel="noopener" title="{{ x.d.strftime('%d.%m') }} — сдан, открыть отчёт"></a>{% else %}<span class="repday{{ ' is-ok' if x.ok }}{{ ' is-off' if x.off }}" title="{{ x.d.strftime('%d.%m') }} — {{ 'сдан' if x.ok else ('выходной' if x.off else 'нет отчёта') }}"></span>{% endif %}{% endfor %}
+  </span>
+</div>
+{% endif %}
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if native %}
+<div class="section" id="deklaraciya"><h2>Декларация</h2>
+  <p>Цели, которые участник заявил на поток, и шаги к ним. Ведётся на платформе: % цели — отмеченные шаги из написанных, % декларации — среднее по целям</p></div>
+{% if sign %}
+<div class="surface signbox signbox--{{ {'ждёт подписи': 'wait', 'правки после печати': 'warn', 'нужна новая подпись': 'warn', 'подписана': 'ok'}.get(sign.state, 'none') }}" id="podpis">
+  <div class="signbox__head">
+    <b>На подпись</b>
+    <span class="state {{ 'state--quiet' if sign.state in ('нужна новая подпись', 'правки после печати') else '' }}">{{ sign.state }}</span>
+  </div>
+  <p class="tag" style="margin:var(--space-3xs) 0 var(--space-xs)">
+    {% if sign.state == 'не готовили' %}Когда цели и шаги согласованы, нажмите «Подготовить к подписи» — платформа запомнит эту версию и откроет страницу для печати.
+    {% elif sign.state == 'ждёт подписи' %}Версия {{ sign.pending.no }} распечатана {{ sign.pending.created_at|d }}. Когда участник подпишет бумагу — отметьте.
+    {% elif sign.state == 'правки после печати' %}После печати версии {{ sign.pending.no }} декларацию поправили — распечатайте новую версию.
+    {% elif sign.state == 'нужна новая подпись' %}Декларацию изменили после подписи версии {{ sign.signed.no }} ({{ sign.signed.signed_on|d }}) — нужна новая подпись.
+    {% else %}Подписана версия {{ sign.signed.no }} — {{ sign.signed.signed_on|d }}{% if sign.signed.signed_by %}, отметил(а) @{{ sign.signed.signed_by }}{% endif %}.{% endif %}
+  </p>
+  {% if sign.changed %}
+  <ul class="signbox__changes">{% for c in sign.changed %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if may_lead_decl %}
+  <div class="signbox__act">
+    {% if sign.state in ('не готовили', 'нужна новая подпись', 'правки после печати') %}
+    <form method="post" action="/decl/{{ person.id }}"><input type="hidden" name="op" value="version_new">
+      <button type="submit">Подготовить к подписи{% if sign.versions %} — версия {{ sign.versions[0].no + 1 }}{% endif %}</button></form>
+    {% endif %}
+    {% if sign.pending %}
+    <a class="more" href="/decl/{{ person.id }}/print?v={{ sign.pending.no }}">Распечатать версию {{ sign.pending.no }}</a>
+    {% if sign.state == 'ждёт подписи' %}
+    <form class="filters" method="post" action="/decl/{{ person.id }}" style="margin:0">
+      <input type="hidden" name="op" value="version_signed"><input type="hidden" name="n" value="{{ sign.pending.no }}">
+      <label>Подписана<input name="deadline" type="date" value="{{ today }}"></label>
+      <button class="quiet" type="submit">Отметить подписанной</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if sign.versions %}
+  <details class="goaledit"><summary>Версии: {{ sign.versions|length }}</summary>
+    <ul class="signbox__list">{% for x in sign.versions %}
+      <li><a href="/decl/{{ person.id }}/print?v={{ x.no }}">Версия {{ x.no }}</a>
+        <span class="tag">· {{ x.created_at|d }} · {% if x.signed_on and x.status == 'заменена' %}была подписана {{ x.signed_on|d }}, заменена{% else %}{{ x.status }}{% if x.status == 'подписана' %} {{ x.signed_on|d }}{% endif %}{% endif %} · @{{ x.created_by }}</span>
+        {% if may_lead_decl and x.status == 'подписана' %}<form method="post" action="/decl/{{ person.id }}" class="inline">
+          <input type="hidden" name="op" value="version_unsign"><input type="hidden" name="n" value="{{ x.no }}">
+          <button class="quiet stepdel" data-confirm="Снять отметку о подписи версии {{ x.no }}?" title="Снять отметку о подписи">×</button></form>{% endif %}
+      </li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+{% else %}
+<p class="limit">Данные — из таблицы декларации, обновляются раз в час{% if synced %}; последнее обновление {{ synced|stamp }}{% endif %}.</p>
+<div class="section" id="deklaraciya"><h2>Декларация</h2>
+  <p>Цели, которые участник заявил на поток, и шаги к ним. Отмечает сам участник в таблице</p></div>
+{% endif %}
+
+{% for g in goals %}
+<div class="surface" id="goal-{{ g.id }}">
+  <div style="display:flex;justify-content:space-between;gap:var(--space-sm);flex-wrap:wrap;align-items:baseline">
+    <h3 style="margin:0">{{ g.no }}. {{ g.title }}</h3>
+    <span class="state {{ 'state--lost' if g.state == 'просрочена' else 'state--quiet' if g.state == 'отстаёт' else '' }}">{{ g.state }}</span>
+  </div>
+  <p class="head__meta" style="margin:var(--space-2xs) 0 var(--space-sm)">
+    {{ ((g.progress or 0) * 100)|round|int }}% · дедлайн {{ g.deadline|d if g.deadline else '—' }}
+    {% if g.late %} · просрочено шагов: {{ g.late }}{% endif %}
+  </p>
+  {% if g.steps %}
+  <ul class="dsteps">
+    {% for s in g.steps %}
+    <li class="{{ 'is-done' if s.done }}">
+      {% if may_lead_decl %}<form method="post" action="/decl/{{ person.id }}" class="inline">
+        <input type="hidden" name="op" value="step_toggle"><input type="hidden" name="sid" value="{{ s.id }}">
+        <button class="stepbox" title="{{ 'Снять отметку' if s.done else 'Отметить сделанным' }}" aria-label="{{ 'Снять отметку' if s.done else 'Отметить' }}">{{ '✓' if s.done else '' }}</button></form>
+      {% elif own and native and (not s.done or s.self_marked) %}<form method="post" action="/me/steps/{{ s.id }}" class="inline">
+        <button class="stepbox" title="{{ 'Снять свою отметку' if s.done else 'Сделал — отметить' }}" aria-label="{{ 'Снять отметку' if s.done else 'Отметить' }}">{{ '✓' if s.done else '' }}</button></form>
+      {% else %}{{ '✓ ' if s.done }}{% endif %}
+      {{ s.title }}{% if s.deadline %} <span class="tag">до {{ s.deadline|d }}</span>{% endif %}{% if s.late %} <span class="state state--lost">просрочен</span>{% endif %}
+      {% if s.done and s.self_marked %}<span class="pill">отметил(а) сам(а)</span>{% if may_lead_decl %}<form method="post" action="/decl/{{ person.id }}" class="inline">
+        <input type="hidden" name="op" value="step_confirm"><input type="hidden" name="sid" value="{{ s.id }}">
+        <button class="quiet" title="Шаг правда сделан — подтвердить">Подтвердить</button></form>{% endif %}
+      {% elif s.done and s.done_by %}<span class="tag">· {{ s.done_by }}</span>{% endif %}
+      {% if may_lead_decl %}<form method="post" action="/decl/{{ person.id }}" class="inline">
+        <input type="hidden" name="op" value="step_remove"><input type="hidden" name="sid" value="{{ s.id }}"><input type="hidden" name="gid" value="{{ g.id }}">
+        <button class="quiet stepdel" title="Убрать шаг" data-confirm="Убрать шаг «{{ s.title }}»?">×</button></form>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if g.proof %}<p class="head__meta" style="margin:var(--space-sm) 0 0"><b>Подтверждение:</b> {{ g.proof }}</p>{% endif %}
+  {% if may_lead_decl %}
+  <form class="filters" method="post" action="/decl/{{ person.id }}" style="margin:var(--space-sm) 0 0">
+    <input type="hidden" name="op" value="step_add"><input type="hidden" name="gid" value="{{ g.id }}">
+    <label class="grow">Новый шаг<input name="title" required placeholder="что сделать"></label>
+    <label>До<input name="deadline" type="date"></label>
+    <button class="quiet" type="submit">Добавить шаг</button>
+  </form>
+  <details class="goaledit"><summary>Править цель</summary>
+    <form class="filters filters--stack" method="post" action="/decl/{{ person.id }}">
+      <input type="hidden" name="op" value="goal_save"><input type="hidden" name="gid" value="{{ g.id }}">
+      <label class="grow">Цель<input name="title" value="{{ g.title }}" required></label>
+      <label>Дедлайн<input name="deadline" type="date" value="{{ g.deadline[:10] if g.deadline else '' }}"></label>
+      <label class="grow">Чем подтвердит<input name="proof" value="{{ g.proof or '' }}"></label>
+      <button type="submit">Сохранить</button>
+    </form>
+    <div style="display:flex;gap:var(--space-2xs);flex-wrap:wrap;margin-top:var(--space-2xs)">
+      <form method="post" action="/decl/{{ person.id }}"><input type="hidden" name="op" value="goal_close">
+        <input type="hidden" name="gid" value="{{ g.id }}"><input type="hidden" name="on" value="{{ '0' if g.closed else '1' }}">
+        <button class="quiet" title="Для целей без шагов: подарок, сумма, событие">{{ 'Снять «закрыта вручную»' if g.closed else 'Закрыть вручную' }}</button></form>
+      <form method="post" action="/decl/{{ person.id }}"><input type="hidden" name="op" value="goal_remove">
+        <input type="hidden" name="gid" value="{{ g.id }}">
+        <button class="quiet" data-confirm="Убрать цель «{{ g.title }}» вместе с шагами?">Убрать цель</button></form>
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% else %}
+<div class="surface"><p style="margin:0">{% if native %}Целей пока нет.{% else %}В таблице пока нет целей.{% endif %}</p></div>
+{% endfor %}
+{% if may_lead_decl %}
+<form class="filters filters--stack surface" method="post" action="/decl/{{ person.id }}">
+  <input type="hidden" name="op" value="goal_add">
+  <label class="grow">Новая цель<input name="title" required placeholder="Заработал 3 000 000 ₽ чистой прибыли"></label>
+  <label>Дедлайн<input name="deadline" type="date"></label>
+  <label class="grow">Чем подтвердит<input name="proof" placeholder="выписка, фото, отчёт"></label>
+  <button type="submit">Добавить цель</button>
+</form>
+{% endif %}
+
+</section>
+
+<section class="tabpanel" id="t-info" data-panel="info">
+{% if anketa or (show_money and person.phone) or (may_org_decl) %}
+<div class="section" id="anketa"><h2>Из анкеты</h2>
+  <p>{% if fourday_flow %}Данные из таблицы участников 4-дневного мастермайнда{% else %}Данные из таблицы участников{% endif %} — видят только организаторы</p></div>
+<div class="surface">
+  {% if anketa or person.phone %}
+  <dl class="anketa">
+    {% if show_money and person.phone %}<div><dt>Телефон</dt><dd>+7 {{ person.phone[0:3] }} {{ person.phone[3:6] }}-{{ person.phone[6:8] }}-{{ person.phone[8:10] }}</dd></div>{% endif %}
+    {% if person.username %}<div><dt>Телеграм</dt><dd>@{{ person.username }}{% if person.tg_user_id %} · вошёл на платформу{% endif %}</dd></div>{% endif %}
+    {% for k, v in anketa %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}
+  </dl>
+  {% endif %}
+  {% if may_org_decl %}
+  <form class="filters" method="post" action="/people/{{ person.id }}/photo" enctype="multipart/form-data" style="margin:var(--space-sm) 0 0">
+    <label class="grow">{{ 'Заменить фото' if photo else 'Фото участника' }}<input type="file" name="file" accept="image/*" required></label>
+    <button class="quiet" type="submit">Загрузить</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+<div class="section"><h2>Кто это</h2>
+  <p>Что известно о человеке. У каждого сведения — откуда оно и когда внесено</p></div>
+{% set proposed = (info.values() | map(attribute='proposed') | sum(start=[])) if may_edit_info else [] %}
+{% if proposed %}
+<div class="surface proposals">
+  <h3>Новое из созвонов и разборов — проверьте</h3>
+  <p class="head__meta" style="margin-top:0">Найдено в расшифровках. Разметка голосов иногда путает людей, поэтому сведение попадает в карточку только после вашего «Принять».</p>
+  {% for r in proposed %}
+  <div class="proposal">
+    <div><b>{{ info[r.field].title }}:</b> {{ r.value }}
+      <span class="sub">{{ r.source }}{% if r.quote %} — «{{ r.quote }}»{% endif %}</span></div>
+    {% if may_edit_info %}
+    <form method="post" action="/participants/{{ p.user_id }}/info/{{ r.id }}" class="proposal__act">
+      <button name="accept" value="1">Принять</button>
+      <button name="accept" value="0" class="quiet">Отклонить</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="cols">
+  {% for group, gtitle in [('who', 'Кто он'), ('contacts', 'Контакты')] %}
+  <div class="surface">
+    <h3>{{ gtitle }}</h3>
+    <dl class="facts">
+      {% for f in info.values() if f.group == group %}
+      <div><dt>{{ f.title }}</dt>
+        <dd>{% if f.current and f.current.value %}<span class="facts__v">{{ f.current.value }}</span>
+          <span class="sub">{{ f.current.source }}{% if f.current.author %} · {{ f.current.author }}{% endif %} · {{ f.current.created_at|stamp }}</span>
+          {% else %}<span class="tag">не известно</span>{% endif %}</dd></div>
+      {% endfor %}
+      {% if group == 'who' %}
+      {% if person.word_price %}<div><dt>Цена слова</dt><dd>{{ person.word_price }}<span class="sub">из таблицы декларации</span></dd></div>{% endif %}
+      {% if person.perk %}<div><dt>Плюшка</dt><dd>{{ person.perk }}<span class="sub">из таблицы декларации</span></dd></div>{% endif %}
+      {% else %}
+      <div><dt>Команда</dt><dd>{% if person.team_title %}<a href="/teams/{{ person.team_ref }}">{{ person.team_title }}</a>{% else %}—{% endif %}</dd></div>
+      <div><dt>Менторы и трекер</dt><dd>{{ mentors | join(', ') if mentors else '—' }}</dd></div>
+      {% endif %}
+    </dl>
+  </div>
+  {% endfor %}
+</div>
+
+{% if may_edit_info %}
+<details class="surface edit-facts">
+  <summary>Дополнить или исправить</summary>
+  <form class="filters filters--stack" method="post" action="/participants/{{ p.user_id }}/info">
+    {% for f in info.values() %}
+    <label>{{ f.title }}
+      {% if f.key in ['request', 'about'] %}<textarea name="{{ f.key }}" rows="3">{{ f.current.value if f.current else '' }}</textarea>
+      {% else %}<input name="{{ f.key }}" value="{{ f.current.value if f.current else '' }}">{% endif %}</label>
+    {% endfor %}
+    <button type="submit">Сохранить</button>
+  </form>
+</details>
+{% endif %}
+
+<div class="section"><h2>Портрет по созвонам</h2>
+  <p>Каким человек предстаёт на сессиях, разборах и конференциях</p></div>
+<div class="surface"><p style="margin:0;max-width:var(--measure)">Появится, когда записи созвонов из Стенографа
+  начнут разбираться по людям: какую встречу к какому потоку отнести, кто из участников говорил
+  и что нового о нём стало известно. Пока здесь только то, что внесено вручную.</p></div>
+</section>
+
+<section class="tabpanel" id="t-reviews" data-panel="reviews">
+{% include "_reviews.html" %}
+</section>
+
+<section class="tabpanel" id="t-goals" data-panel="goals">
+{% with goals = goals_mentor %}{% include "_goals.html" %}{% endwith %}
+</section>
+
+<section class="tabpanel" id="t-money" data-panel="money">
+<div class="section" id="planka"><h2>Вовлечение и деньги</h2>
+  <p>{% if native %}Личная планка по вовлечению, вовлечённые и денежная цель. Отмечают организаторы{% else %}Командная планка по вовлечению и денежная цель из таблицы{% endif %}</p></div>
+<div class="surface">
+  <div class="figures" style="margin:0 0 var(--space-sm);border:none;padding:0">
+    <div><div class="figure__n">{{ ((person.bar_progress or 0) * 100)|round|int }}<small> %</small></div><div class="figure__k">планки по вовлечению</div></div>
+    {% if show_money %}
+    <div><div class="figure__n figure__n--money">{{ (person.money_goal or 0)|money }}</div><div class="figure__k">цель в деньгах</div></div>
+    <div><div class="figure__n figure__n--money">{{ (person.money_fact or 0)|money }}</div><div class="figure__k">факт</div></div>
+    {% endif %}
+  </div>
+  {% if involved %}
+  <ul style="margin:0;padding-left:1.1rem">
+    {% for i in involved %}<li>{{ '✓ ' if i.done }}{{ i.text }}
+      {% if may_org_decl and i.done %}<form method="post" action="/decl/{{ person.id }}" class="inline">
+        <input type="hidden" name="op" value="inv_remove"><input type="hidden" name="idx" value="{{ i.idx }}"><input type="hidden" name="tab" value="money">
+        <button class="quiet stepdel" title="Снять вовлечение" data-confirm="Снять это вовлечение?">×</button></form>{% endif %}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if may_org_decl %}
+  <form class="filters" method="post" action="/decl/{{ person.id }}" style="margin:var(--space-sm) 0 0">
+    <input type="hidden" name="op" value="inv_add"><input type="hidden" name="tab" value="money">
+    <label>Дата<input name="deadline" type="date" value="{{ today }}"></label>
+    <label class="grow">Куда вовлёк<input name="program" value="большая программа"></label>
+    <button type="submit">+1 вовлечение</button>
+  </form>
+  <form class="filters" method="post" action="/decl/{{ person.id }}" style="margin:var(--space-2xs) 0 0">
+    <input type="hidden" name="op" value="planka"><input type="hidden" name="tab" value="money">
+    <label>Личная планка<input name="n" type="number" min="0" max="50" value="{{ planka }}" style="max-width:5rem"></label>
+    <button class="quiet" type="submit">Изменить планку</button>
+    {% if share %}<span class="tag">+ {{ '%.2f'|format(share)|replace('.', ',') }} за выбывших команды</span>{% endif %}
+  </form>
+  {% endif %}
+  {% if person.word_price or person.perk %}
+  <p class="head__meta" style="margin:var(--space-sm) 0 0">
+    {% if person.word_price %}Цена слова: {{ person.word_price }}{% endif %}
+    {% if person.word_price and person.perk %} · {% endif %}
+    {% if person.perk %}Плюшка: {{ person.perk }}{% endif %}</p>
+  {% endif %}
+</div>
+{% if may_org_decl %}
+<div class="surface">
+  <h3 style="margin:0 0 var(--space-2xs)">Деньги по неделям</h3>
+  {% if weeks %}
+  <div class="scroll"><table>
+    <thead><tr><th>Неделя</th><th>Период</th><th class="right">Факт, ₽</th></tr></thead>
+    <tbody>{% for w in weeks %}{% set m = money_weeks.get(w.no) %}
+      <tr><td>Н{{ w.no }}</td><td class="tag">{{ w['from'].strftime('%d.%m') }} – {{ w['to'].strftime('%d.%m') }}</td>
+        <td class="right"><form method="post" action="/decl/{{ person.id }}" class="inline">
+          <input type="hidden" name="op" value="money"><input type="hidden" name="n" value="{{ w.no }}"><input type="hidden" name="tab" value="money">
+          <input name="amount" inputmode="numeric" value="{{ m.amount if m else '' }}" style="max-width:9rem;text-align:right" placeholder="0">
+          <button class="quiet" type="submit">✓</button></form></td></tr>{% endfor %}
+    </tbody></table></div>
+  {% else %}<p class="tag" style="margin:0">Задайте даты старта и финиша потока — появятся недели.</p>{% endif %}
+  <form class="filters filters--stack" method="post" action="/decl/{{ person.id }}" style="margin-top:var(--space-sm)">
+    <input type="hidden" name="op" value="terms"><input type="hidden" name="tab" value="money">
+    <label>Цель в деньгах, ₽<input name="money_goal" inputmode="numeric" value="{{ person.money_goal or '' }}"></label>
+    <label class="grow">Цена слова<input name="word_price" value="{{ person.word_price or '' }}" placeholder="200 000 ₽"></label>
+    <label class="grow">Плюшка<input name="perk" value="{{ person.perk or '' }}" placeholder="часы от 1 млн"></label>
+    <button type="submit">Сохранить</button>
+  </form>
+  <form method="post" action="/decl/{{ person.id }}" style="margin-top:var(--space-sm)">
+    <input type="hidden" name="op" value="left"><input type="hidden" name="on" value="{{ '0' if person.status == 'выбыл' else '1' }}"><input type="hidden" name="tab" value="money">
+    <button class="quiet" data-confirm="{{ 'Вернуть участника в поток?' if person.status == 'выбыл' else 'Отметить, что участник выбыл? Его вовлечённые останутся команде, а планка поделится между оставшимися участниками.' }}">{{ 'Вернуть в поток' if person.status == 'выбыл' else 'Выбыл из потока' }}</button>
+  </form>
+</div>
+{% endif %}
+
+</section>
+<script src="/static/tabs.js?v={{ v }}" defer></script>
+{% if native %}<script src="/static/posts.js?v={{ v }}" defer></script>{% endif %}
+{% if calls is not none %}
+<section class="tabpanel" id="t-calls" data-panel="calls">
+  <div class="section"><h2>Созвоны</h2>
+    <p>Встречи «Вершины», где {{ person.name.split()[1] if person.name.split()|length > 1 else person.name }} говорил(а) — по записям Стенографа</p></div>
+  {% if calls %}
+  <div class="surface surface--flush scroll">
+  <table>
+    <thead><tr><th>Встреча</th><th>Когда</th><th>Говорил(а)</th><th class="num">Реплик</th></tr></thead>
+    <tbody>
+    {% for c in calls %}
+    <tr><td><a href="/calls/{{ c.id }}">{{ c.title }}</a>{% if c.has_summary %} <span class="pill">выжимка</span>{% endif %}</td>
+      <td class="nowrap">{{ c.when.strftime('%d.%m %H:%M') if c.when else '—' }}</td>
+      <td class="nowrap">{{ (c.talk // 60) | int }} мин <span class="tag">из {{ (c.secs // 60) | int }}</span></td>
+      <td class="num">{{ c.turns }}</td></tr>
+    {% set n = call_notes.get(c.id) %}
+    {% if n and (n.note or n.alarm) %}<tr><td colspan="4" class="sub" style="padding-top:0">{% if n.alarm %}<span class="late">⚠ {{ n.alarm }}</span> {% endif %}{{ n.note or '' }}{% set pr = n.promises | fromjson %}{% if pr %} <b>Пообещал(а):</b> {{ pr | join('; ') }}{% endif %}</td></tr>{% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="surface"><p style="margin:0">На записанных встречах «Вершины» пока не говорил(а) — или подписан(а) в Зуме так,
+    что платформа не узнала. Это можно отметить на странице встречи.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

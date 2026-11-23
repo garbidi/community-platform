@@ -1,0 +1,122 @@
+{# Обзор одного потока: подгружается и целиком в «Обзоре», и отдельно —
+   при переключении потока крючком (flowswitch.js, ?partial=1). #}
+  {% set f = flow %}
+  <section class="deep" aria-label="Поток {{ f.flow if f else '' }}">
+    <canvas class="deep__canvas" data-dots='{{ (f.dots if f and f.dots else []) | tojson }}'></canvas>
+    <div class="deep__text">
+      {% if f and f.totals %}
+      <p class="deep__kicker">Поток {{ f.flow }}{% if f.days.until %} · старт через {{ f.days.until }} дн.{% endif %}{% if f.days.day %} · день {{ f.days.day }}{% if f.days.total %} из {{ f.days.total }}{% endif %}{% endif %}</p>
+      <p class="deep__big">{{ ((f.totals.progress or 0) * 100) | round | int }}<small>%</small></p>
+      <p class="deep__cap">среднее выполнение деклараций · {{ f.totals.people }} {{ 'участник' if f.totals.people % 10 == 1 and f.totals.people % 100 != 11 else 'участника' if f.totals.people % 10 in [2,3,4] and f.totals.people % 100 not in [12,13,14] else 'участников' }}{% if f.days.left is defined and f.days.left >= 0 %} · до конца {{ f.days.left }} дн.{% endif %}</p>
+      {% if not f.days.total and f.last_deadline %}<p class="deep__cap" style="opacity:.6">последний дедлайн деклараций — {{ f.last_deadline | d }}</p>{% endif %}
+      <p class="deep__legend">Каждая точка — участник. Чем глубже, тем больше выполнено: на дне — те, кто закрыл декларацию. Нажмите на точку — покажет, кто это.</p>
+      {% else %}
+      <p class="deep__kicker">Вершина</p>
+      <p class="deep__cap">{% if f %}В потоке {{ f.flow }} пока нет участников — они появятся, когда прочитаются таблицы команд.{% else %}Текущий поток не выбран — здесь появится его картина.{% endif %}
+        {% if nav | selectattr('href', 'equalto', '/flows') | list %}<a href="/flows" style="color:inherit;text-decoration:underline">Создать или выбрать поток</a>{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if f and f.totals %}
+  <div class="figures">
+    <div><div class="figure__n">{{ f.totals.steps_done }}<small> / {{ f.totals.steps_total }}</small></div>
+      <div class="figure__k">шагов деклараций сделано</div></div>
+    <div class="{{ 'figure--flag' if f.totals.late }}"><div class="figure__n">{{ f.totals.late }}</div>
+      <div class="figure__k">шагов просрочено</div></div>
+{% if show_money %}
+    <div><div class="figure__n figure__n--money">{{ f.totals.money_fact | money }}</div>
+      <div class="figure__k">заработано из {{ f.totals.money_goal | money }} по декларациям</div></div>
+    {% endif %}
+    <div><div class="figure__n">{{ f.totals.goals_closed }}<small> / {{ f.totals.goals_total }}</small></div>
+      <div class="figure__k">целей закрыто</div></div>
+  </div>
+
+  {% include "_inv_board.html" %}
+
+  <div class="section"><h2>Команды</h2>
+    <p>Из таблиц деклараций{% if f.sync and f.sync.at %}, обновлено {{ f.sync.at | stamp }}{% endif %}</p></div>
+  <div class="teamgrid">
+    {% for t in f.teams %}
+    <div class="surface teamcard">
+      <h3>{{ t.title }}</h3>
+      {% if t.mentors %}<p class="tag">{{ t.mentors | join(', ') }}</p>{% endif %}
+      <div class="meter" title="выполнение деклараций"><span style="width:{{ ((t.progress or 0) * 100) | round(1) }}%"></span></div>
+      <dl class="teamcard__nums">
+        <div><dt>декларации</dt><dd>{{ ((t.progress or 0) * 100) | round | int }}%</dd></div>
+        {% if t.bar is not none %}<div><dt>вовлечение</dt><dd>{{ (t.bar * 100) | round | int }}%</dd></div>{% endif %}
+{% if show_money %}<div><dt>деньги</dt><dd>{{ t.money_fact | money }}<span class="tag"> из {{ t.money_goal | money }}</span></dd></div>{% endif %}
+        <div><dt>просрочено</dt><dd class="{{ 'late' if t.late }}">{{ t.late }}</dd></div>
+      </dl>
+      <p class="tag" style="margin:0">{{ t.members }} в команде</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="section"><h2>Кому нужна помощь</h2>
+    <p>Просроченные цели и шаги, пустые декларации — с кем стоит поговорить в первую очередь</p></div>
+  {% if f.help %}
+  <div class="surface surface--flush scroll">
+    <table>
+      <thead><tr><th>Участник</th><th>Что не так</th><th>Самый старый хвост</th><th class="num">Выполнено</th></tr></thead>
+      <tbody>
+      {% for h in f.help[:12] %}
+      <tr>
+        <td><a href="/participants/{{ h.card }}">{{ h.name }}</a><span class="sub">{{ h.team }}</span></td>
+        <td><span class="state state--{{ 'lost' if h.weight >= 10 else 'quiet' }}">{{ h.reasons | join(', ') }}</span></td>
+        <td>{% if h.step %}{{ h.step }}<span class="sub">{{ h.since }} дн. назад</span>{% else %}—{% endif %}</td>
+        <td class="num">{{ ((h.progress or 0) * 100) | round | int }}%</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if f.help | length > 12 %}<p><a class="more" href="/participants">Ещё {{ f.help | length - 12 }} — все участники</a></p>{% endif %}
+  {% else %}
+  <p class="limit"><b>Все в графике.</b> Просроченных целей и шагов нет.</p>
+  {% endif %}
+
+  <div class="section"><h2>Календарь потока</h2>
+    <p>Дедлайны шагов и целей из деклараций. Выберите день — справа появится, что у кого запланировано</p></div>
+  {% if f.cal %}
+  {% set start_m = (f.cal | selectattr('has_today') | first or f.cal[0]).key %}
+  <div class="planner" data-flow="{{ f.flow }}">
+    <div class="surface cal">
+      {% for m in f.cal %}
+      <div class="cal__month" data-month="{{ m.key }}" {{ 'hidden' if m.key != start_m }}>
+        <div class="cal__head">
+          <button type="button" class="cal__nav" data-step="-1" aria-label="Предыдущий месяц" {{ 'disabled' if loop.first }}>‹</button>
+          <h3>{{ m.title }}</h3>
+          <button type="button" class="cal__nav" data-step="1" aria-label="Следующий месяц" {{ 'disabled' if loop.last }}>›</button>
+        </div>
+        <div class="cal__grid" role="grid">
+          {% for wd in ['пн','вт','ср','чт','пт','сб','вс'] %}<div class="cal__wd">{{ wd }}</div>{% endfor %}
+          {% for w in m.weeks %}{% for c in w %}
+          {% if c.own and c.in %}
+          <button type="button" class="cal__day{{ ' is-today' if c.today }}{{ ' is-past' if c.past }}{{ ' is-picked' if c.date == f.pick }}{{ ' is-empty' if not c.n and not c.goals }}"
+                  data-date="{{ c.date }}" style="--load:{{ c.load }}"
+                  title="{{ c.n }} {{ 'шаг' if c.n % 10 == 1 and c.n % 100 != 11 else 'шага' if c.n % 10 in [2,3,4] and c.n % 100 not in [12,13,14] else 'шагов' }}{% if c.goals %} · целей: {{ c.goals }}{% endif %}{% if c.past and c.n %} · сделано {{ c.ok }}{% endif %}">
+            {% if c.rep is not none %}<span class="cal__rep{{ ' is-low' if c.rep < 0.8 }}" style="width:{{ (c.rep * 100) | round | int }}%" title="отчёты: {{ (c.rep * 100) | round | int }}% сдали"></span>{% endif %}
+            <span class="cal__num">{{ c.day }}</span>
+            {% if c.n %}<span class="cal__n">{{ c.n }}</span>{% endif %}
+            <span class="cal__marks">{% if c.goals %}<i class="cal__goal"></i>{% endif %}{% if c.late %}<i class="cal__late"></i>{% endif %}</span>
+          </button>
+          {% else %}
+          <div class="cal__day cal__day--off">{% if c.own %}<span class="cal__num">{{ c.day }}</span>{% endif %}</div>
+          {% endif %}
+          {% endfor %}{% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      <p class="cal__legend"><span><i class="cal__swatch"></i>больше шагов — ярче</span>
+        <span><i class="cal__goal"></i>дедлайн цели</span><span><i class="cal__late"></i>есть невыполненное</span>
+        <span><i class="cal__repkey"></i>полоска сверху — сколько сдали отчёт</span></p>
+    </div>
+    <div class="surface dayplan" aria-live="polite">
+      {% with plan = f.plan %}{% include "_day_plan.html" %}{% endwith %}
+    </div>
+  </div>
+  {% else %}
+  <p class="limit">В декларациях пока нет дедлайнов — календарю нечего показать.</p>
+  {% endif %}
+  {% endif %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Команды · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Команды<span class="brace">}</span></h1>
+  <p class="head__meta">Каждая команда ставит себе цель — сколько человек вовлечь за поток — и идёт к ней.
+    Цифры — как на листе «Дашборд» в таблице команды: с выбывшими из команды и долей за выбывших потока</p>
+</div>
+
+<nav class="tabs" aria-label="Потоки">
+  {% for x in choices %}<a href="/teams?flow={{ x.name | urlencode }}" class="{{ 'is-on' if f and x.id == f.id }}">{{ x.name }}{% if x.status == 'завершён' %} <span class="pill">завершён</span>{% endif %}</a>{% endfor %}
+  {% if archive_count %}<a href="/teams?view=archive">Архив: ММ5 и ММ6</a>{% endif %}
+</nav>
+
+{% if not f %}
+<div class="surface"><p style="margin:0">Потоков пока нет.</p></div>
+{% elif not b.teams %}
+<div class="surface"><p style="margin:0">В потоке {{ f.name }} ещё нет команд.
+  {% if organizer %}<a href="/flows/{{ f.id }}">Добавить команды</a>{% endif %}</p></div>
+{% else %}
+
+<div class="figures">
+  <div><div class="figure__n">{{ b.done }}{% if b.goal %}<small> / {{ b.goal }}</small>{% endif %}</div>
+    <div class="figure__k">вовлечено{% if b.goal %} из суммы целей команд{% endif %}</div></div>
+  <div><div class="figure__n">+{{ b.week }}</div>
+    <div class="figure__k">за неделю, {{ b.from | d }}–{{ b.to | d }}</div></div>
+  {% if b.goal %}
+  <div class="{{ 'figure--flag' if b.goal > b.done }}"><div class="figure__n">{{ [b.goal - b.done, 0] | max }}</div>
+    <div class="figure__k">осталось до целей</div></div>
+  {% endif %}
+</div>
+
+<ol class="board">
+  {% for t in b.teams %}
+  {% set own = t.id in mine %}
+  {% set open = organizer or own or (user.role in ('admin', 'coordinator')) %}
+  <li class="surface board__row{{ ' is-mine' if own }}{{ ' is-first' if t.place == 1 }}{{ ' is-nogoal' if not t.goal }}"
+      style="--fill:{{ (t.fill * 100) | round(1) }}%"
+      title="{% if t.goal %}{{ (t.fill * 100) | round | int }}% пути к цели команды{% else %}{{ (t.fill * 100) | round | int }}% от суммы личных планок — цель команды не задана{% endif %}">
+    <div class="board__place">{{ t.place or '—' }}</div>
+    <div class="board__who">
+      <h3>{% if open %}<a href="/teams/{{ t.id }}">{{ t.title }}</a>{% else %}{{ t.title }}{% endif %}
+        {% if own %}<span class="pill pill--accent">ваша команда</span>{% endif %}</h3>
+      <p class="tag">{{ t.mentors | join(', ') or 'менторы не выбраны' }}{% if t.trackers %} · трекер {{ t.trackers | join(', ') }}{% endif %} · {{ t.people }} чел.</p>
+    </div>
+    <div class="board__track">
+      {% if t.goal %}
+      <div class="board__bar" role="img" aria-label="{{ t.done }} из {{ t.goal }}">
+        <span style="width:{{ (t.share * 100) | round(1) }}%"></span>
+      </div>
+      <p class="board__nums"><b>{{ t.done }}</b> из {{ t.goal }}
+        {% if t.left %}<span class="tag">· осталось {{ t.left }}</span>{% else %}<span class="state">цель взята</span>{% endif %}
+        {% if t.goal_from == 'дашборд' %}<span class="tag" title="Планка команды с листа «Дашборд» её таблицы">· планка из таблицы</span>{% endif %}</p>
+      {% else %}
+      <p class="board__nums"><b>{{ t.done }}</b> вовлечено <span class="tag">· цель не задана{% if t.plan %}; личные планки участников: {{ t.plan }}{% endif %}</span></p>
+      {% endif %}
+    </div>
+    <div class="board__week">
+      <b class="{{ 'is-zero' if not t.week }}">+{{ t.week }}</b><span class="tag">за неделю</span>
+      {% if t.last %}<span class="tag">последний {{ t.last.strftime('%d.%m') }}</span>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% if not organizer %}<p class="limit">Состав и вовлечённые по людям видны в своей команде.</p>{% endif %}
+{% endif %}
+{% endblock %}

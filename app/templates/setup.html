@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Настройка · {{ title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <link rel="icon" href="/static/logo-navy.svg">
+  <style>
+    .steps { list-style: none; padding: 0; margin: 0 0 1.5rem; font-size: .9rem; }
+    .steps li { padding: .35rem 0 .35rem 1.6rem; position: relative; opacity: .45; }
+    .steps li.on { opacity: 1; font-weight: 600; }
+    .steps li.ok { opacity: .8; }
+    .steps li::before { content: "○"; position: absolute; left: 0; }
+    .steps li.ok::before { content: "✓"; }
+    .steps li.on::before { content: "→"; }
+    .hint { font-size: .9rem; line-height: 1.5; opacity: .8; }
+    .hint ol { padding-left: 1.2rem; }
+    .big-link { display: inline-block; margin: .5rem 0 1rem; word-break: break-all; }
+    .aside { border-top: 1px solid rgba(0,0,0,.12); margin-top: 1.5rem;
+             padding-top: 1rem; font-size: .85rem; opacity: .75; }
+  </style>
+</head>
+<body>
+<div class="poster">
+  <div class="poster__brand">
+    <img src="/static/logo-cream.svg" alt="vershina.community">
+    <p class="poster__claim">Осталось несколько шагов</p>
+    <ol class="steps">
+      {% for key, label in steps %}
+        <li class="{% if key == step %}on{% elif state.get(key) %}ok{% endif %}">{{ label }}</li>
+      {% endfor %}
+    </ol>
+    <p class="poster__note">Ничего из этого не нужно запоминать. Если что-то
+      пойдёт не так, страницу можно просто открыть заново — сделанные шаги
+      сохранятся.</p>
+  </div>
+
+  <div class="poster__form">
+    {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
+
+    {# ------------------------------------------------------ учётка #}
+    {% if step == "account" %}
+      <h1>Ваш вход</h1>
+      <p class="hint">Придумайте логин и пароль — ими вы будете открывать
+        эту панель. К телеграму они отношения не имеют.</p>
+      <form method="post" action="/setup/account">
+        <label>Как вас зовут
+          <input name="name" value="{{ values.name if values else '' }}" autofocus required></label>
+        <label>Логин
+          <input name="login" value="{{ values.login if values else '' }}"
+                 autocomplete="username" required></label>
+        <label>Пароль
+          <input name="password" type="password" autocomplete="new-password" required></label>
+        <label>Пароль ещё раз
+          <input name="password2" type="password" autocomplete="new-password" required></label>
+        <button type="submit">Дальше</button>
+      </form>
+
+    {# --------------------------------------------------------- бот #}
+    {% elif step == "bot" %}
+      <h1>Бот в телеграме</h1>
+      <p class="hint">Помощник будет говорить с вами через бота. Бота выдаёт
+        сам телеграм — это займёт минуту:</p>
+      <ol class="hint">
+        <li>Откройте в телеграме <b>@BotFather</b></li>
+        <li>Отправьте ему <b>/newbot</b></li>
+        <li>Придумайте имя — например, «Мой помощник»</li>
+        <li>Придумайте адрес, он должен оканчиваться на <b>bot</b></li>
+        <li>В ответ придёт длинная строка с двоеточием — это и есть токен</li>
+      </ol>
+      <form method="post" action="/setup/bot">
+        <label>Вставьте токен целиком
+          <input name="token" placeholder="1234567890:AAE..." autofocus required></label>
+        <button type="submit">Проверить</button>
+      </form>
+
+    {# -------------------------------------------------- кто хозяин #}
+    {% elif step == "owner" %}
+      <h1>Это вы</h1>
+      <p class="hint">Бот должен отвечать только вам. Чтобы он вас запомнил,
+        напишите ему любое слово — и нажмите кнопку ниже. Ничего вводить
+        не нужно, он узнает вас сам.</p>
+      {% if state.bot %}
+        <p class="hint">Ваш бот:
+          <b>@{{ bot_username or (state.bot_username if state else '') }}</b></p>
+      {% endif %}
+      <form method="post" action="/setup/owner">
+        <button type="submit">Я написал, проверить</button>
+      </form>
+
+    {# ---------------------------------------------------- телеграм #}
+    {% elif step == "telegram" %}
+      <h1>Ваш телеграм</h1>
+      {% if not sent %}
+        <p class="hint">Чтобы помощник читал вашу переписку и находил в ней
+          нужное, ему нужен доступ к вашему телеграму.</p>
+        <p class="hint"><b>Что важно понимать.</b> Сейчас телеграм пришлёт вам
+          код и припишет «никому его не передавайте». Предупреждение верное:
+          код открывает доступ к переписке. Вводите его здесь, только если
+          доверяете тому, кто поставил этого помощника, — доступ останется
+          на сервере и будет действовать, пока вы сами не отключите его
+          в телеграме (Настройки → Устройства).</p>
+        <form method="post" action="/setup/telegram/phone">
+          <label>Номер телефона
+            <input name="phone" placeholder="+7…" autofocus required></label>
+          <button type="submit">Прислать код</button>
+        </form>
+      {% else %}
+        <p class="hint">Код отправлен — он придёт <b>внутрь телеграма</b>,
+          сообщением от «Telegram», а не в СМС.</p>
+        <form method="post" action="/setup/telegram/code">
+          <label>Код из телеграма
+            <input name="code" inputmode="numeric" autofocus required></label>
+          {% if need_password %}
+            <label>Пароль двухфакторной защиты
+              <input name="password" type="password" required></label>
+          {% endif %}
+          <button type="submit">Войти</button>
+        </form>
+      {% endif %}
+
+    {# ------------------------------------------------------ claude #}
+    {% elif step == "claude" %}
+      <h1>Голова помощника</h1>
+      <p class="hint">Думает за помощника Claude. Нужно один раз войти в вашу
+        подписку — списаний за каждый вопрос при этом не будет.</p>
+      {% if login_url %}
+        <p class="hint">Откройте ссылку, войдите и скопируйте код, который
+          покажет страница:</p>
+        <a class="big-link" href="{{ login_url }}" target="_blank" rel="noopener">{{ login_url }}</a>
+        <form method="post" action="/setup/claude/code">
+          <label>Код со страницы
+            <input name="code" autofocus required></label>
+          <button type="submit">Готово</button>
+        </form>
+      {% else %}
+        <form method="post" action="/setup/claude/start">
+          <button type="submit">Войти в Claude</button>
+        </form>
+      {% endif %}
+
+      {% if fallback or login_url %}
+        <div class="aside">
+          <p>Если кнопка не сработала, есть запасной путь: вставьте сюда
+            готовый токен или ключ. Где его взять — подскажет тот, кто
+            ставил помощника.</p>
+          <form method="post" action="/setup/claude/token">
+            <label>Токен или ключ
+              <input name="value" required></label>
+            <button type="submit">Сохранить</button>
+          </form>
+        </div>
+      {% endif %}
+
+    {# --------------------------------------------- необязательное #}
+    {% elif step == "extras" %}
+      <h1>Календарь и встречи</h1>
+      <p class="hint">Помощник умеет смотреть ваш календарь и заходить на
+        встречи в Zoom, чтобы записывать их и присылать разбор. Это можно
+        подключить сейчас или потом — на остальное оно не влияет.</p>
+      <p class="hint">Подключение требует доступов от Google и Zoom, поэтому
+        его лучше делать вместе с тем, кто ставил помощника.</p>
+      <form method="post" action="/setup/extras">
+        <button type="submit">Пропустить пока</button>
+      </form>
+
+    {# ----------------------------------------------------- проверка #}
+    {% elif step == "check" %}
+      {% if sent %}
+        <h1>Готово</h1>
+        <p class="hint">Я отправил вам сообщение в телеграм — загляните туда
+          и ответьте что-нибудь. Помощник уже работает.</p>
+        <p class="hint">Эта ссылка настройки больше не действует. В панель
+          теперь входите логином и паролем с первого шага.</p>
+        <a class="big-link" href="/login">Перейти ко входу</a>
+      {% else %}
+        <h1>Проверка</h1>
+        <p class="hint">Сейчас помощник напишет вам в телеграм. Если сообщение
+          придёт — всё настроено верно.</p>
+        <form method="post" action="/setup/check">
+          <button type="submit">Проверить</button>
+        </form>
+      {% endif %}
+    {% endif %}
+
+    <p class="trouble">Настройка идёт по защищённому соединению. Всё, что вы
+      вводите, остаётся на сервере помощника.</p>
+  </div>
+</div>
+</body>
+</html>

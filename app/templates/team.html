@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ s.team.title }} · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>{{ s.team.title }}<span class="brace">}</span></h1>
+  <p class="head__meta">
+    {% if s.team.flow %}Поток {{ s.team.flow }} · {% endif %}{{ s.members }} человек
+    {% if s.team.note %} · {{ s.team.note }}{% endif %}
+    {% if not own %} · <a href="/teams">все группы</a>{% endif %}
+  </p>
+</div>
+
+<div class="figures">
+  <div><div class="figure__n">{{ s.count }}</div><div class="figure__k">вовлечений у группы</div></div>
+  {% if s.goal %}
+  <div class="{{ 'figure--flag' if s.left }}"><div class="figure__n">{{ s.left }}</div>
+    <div class="figure__k">осталось до победы (цель {{ s.goal }})</div></div>
+  {% endif %}
+  {% if show_money %}
+  <div><div class="figure__n figure__n--money">{{ s.brought|money }}</div><div class="figure__k">принесли вовлечения</div></div>
+  <div><div class="figure__n figure__n--money">{{ s.net|money }}</div><div class="figure__k">итого со штрафами</div></div>
+  {% endif %}
+</div>
+
+{% if s.share is not none %}
+<div class="surface">
+  <span class="meter meter--big"><span style="width: {{ (s.share * 100) | round | int }}%"></span></span>
+  <p class="head__meta" style="margin:var(--space-2xs) 0 0">{{ s.count }} из {{ s.goal }} —
+    {{ (s.share * 100) | round | int }}% пути{% if s.left %}, осталось {{ s.left }}{% else %}, цель закрыта{% endif %}.</p>
+</div>
+{% endif %}
+
+<div class="section"><h2>Кто в группе</h2>
+  <p>{% if own %}Ваша команда и сколько вовлечений у каждого{% else %}Состав и вклад каждого{% endif %}</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th>Роль</th><th class="num">Вовлечений</th>
+    {% if show_money %}<th class="num">Принёс</th><th class="num">Штрафы</th>
+    <th class="num">Итого</th>{% endif %}{% if may_edit %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for p in people %}
+  <tr>
+    <td>{% if own %}{{ p.name }}{% else %}<a href="/participants/{{ p.id }}">{{ p.name }}</a>{% endif %}</td>
+    <td class="tag">{{ p.role }}</td>
+    <td class="num">{{ p.count or 0 }}</td>
+    {% if show_money %}
+    <td class="num">{{ (p.brought or 0)|money }}</td>
+    <td class="num">{{ (p.fines or 0)|money }}</td>
+    <td class="num">{{ (p.net or 0)|money }}</td>
+    {% endif %}
+    {% if may_edit %}
+    <td class="right">
+      <form method="post" action="/teams/{{ s.team.id }}/members/{{ p.id }}/remove">
+        <button class="quiet">Убрать</button></form>
+    </td>
+    {% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="7">В группе пока никого.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if may_edit %}
+<div class="section"><h2>Добавить в группу</h2></div>
+<form class="filters surface" method="post" action="/teams/{{ s.team.id }}/members">
+  <select name="tg_user_id" class="grow">
+    {% for c in candidates %}<option value="{{ c.user_id }}">{{ c.name }} — {{ c.messages }} сообщений</option>{% endfor %}
+  </select>
+  <select name="role">
+    <option value="участник">участник</option>
+    <option value="лидер">лидер</option>
+    <option value="ментор">ментор</option>
+  </select>
+  <button type="submit">Добавить</button>
+</form>
+
+<div class="section"><h2>Настройки группы</h2></div>
+<form class="filters filters--stack surface" method="post" action="/teams/{{ s.team.id }}/edit">
+  <label>Название<input name="title" value="{{ s.team.title }}" required></label>
+  <label>Поток<input name="flow" value="{{ s.team.flow or '' }}" style="width:7rem"></label>
+  <label>Цель по вовлечениям<input name="goal" type="number" min="0" value="{{ s.goal }}" style="width:7rem"></label>
+  <label class="grow">Заметка<input name="note" value="{{ s.team.note or '' }}"></label>
+  <button type="submit">Сохранить</button>
+</form>
+<form class="filters surface" method="post" action="/teams/{{ s.team.id }}/archive">
+  <input type="hidden" name="archived" value="{{ 0 if s.team.archived else 1 }}">
+  <span class="grow">{% if s.team.archived %}Группа в архиве.{% else %}Убрать группу из списка, когда поток закончится.{% endif %}</span>
+  <button class="quiet">{{ 'Вернуть из архива' if s.team.archived else 'В архив' }}</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{# План одного дня потока: панель справа от календаря на «Обзоре».
+   Отдельно подгружается по клику на день (/day?flow=…&d=…). #}
+{% if plan %}
+<div class="dayplan__head">
+  <h3>{{ 'Сегодня, ' if plan.today }}{{ plan.title }}<span class="tag"> · {{ plan.weekday }}</span></h3>
+  {% if plan.reports %}{% set r = plan.reports %}
+  <div class="dayplan__rep{{ ' is-full' if r.done == r.total }}">Отчёты: <b>{{ r.done }} из {{ r.total }}</b>{% if not r.missing %} — все на месте{% elif r.missing | length <= 4 %} · нет:
+    {% for m in r.missing %}<a href="/participants/{{ m.card }}">{{ m.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% else %}
+    <details class="dayplan__miss"><summary>нет отчёта у {{ r.missing | length }}</summary>
+      {% for m in r.missing %}<a href="/participants/{{ m.card }}">{{ m.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</details>{% endif %}</div>
+  {% endif %}
+  {% if plan.people %}
+  <p class="tag">{{ plan.people | length }} чел.{% if plan.n_goals %} · целей: {{ plan.n_goals }}{% endif %}
+    {% if plan.n_steps %} · шагов: {{ plan.n_steps }}{% if plan.past or plan.done %}, сделано {{ plan.done }}{% endif %}{% endif %}</p>
+  {% if plan.n_steps %}<div class="meter"><span style="width:{{ (plan.done / plan.n_steps * 100) | round(1) }}%"></span></div>{% endif %}
+  {% endif %}
+</div>
+{% if plan.people %}
+<ul class="dayplan__people">
+  {% for e in plan.people %}
+  <li>
+    <div class="dayplan__who"><a href="/participants/{{ e.card }}">{{ e.name }}</a><span class="tag">{{ e.team }}</span></div>
+    <ul class="dayplan__items">
+      {% for g in e.goals %}<li class="{{ 'is-done' if g.done }}{{ ' is-late' if g.late }}"><span class="week__kind week__kind--goal">цель</span>{{ g.title }}</li>{% endfor %}
+      {% for s in e.steps %}<li class="{{ 'is-done' if s.done }}{{ ' is-late' if s.late }}">{{ s.title }}</li>{% endfor %}
+    </ul>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="dayplan__none">На этот день в декларациях ничего не стоит.</p>
+{% endif %}
+{% else %}
+<p class="dayplan__none">Выберите день в календаре.</p>
+{% endif %}

@@ -1,0 +1,24 @@
+{# Переписка одного чата — как в телеграме. Подгружается и целиком в «Посты», и
+   отдельно при обновлении (/posts/messages). #}
+{% set ns = namespace(day=None) %}
+{% for m in msgs %}
+  {% if m.day != ns.day %}{% set ns.day = m.day %}<div class="tgday"><span>{{ m.at.strftime('%d.%m.%Y') }}</span></div>{% endif %}
+  <div class="tgmsg{{ ' tgmsg--out' if m.out }}{{ ' tgmsg--cont' if m.cont }}" data-id="{{ m.id }}">
+    <div class="tgmsg__ava">{% if not m.cont %}{% if m.avatar %}<img src="/tgavatar/{{ m.sender_id }}" alt="" loading="lazy">{% else %}<span>{{ m.initials }}</span>{% endif %}{% endif %}</div>
+    <div class="tgmsg__bubble">
+      {% if not m.cont %}<div class="tgmsg__who">{{ m.who }}</div>{% endif %}
+      {% if m.reply %}<div class="tgmsg__reply"><b>{{ m.reply.who }}</b><span>{{ m.reply.text }}</span></div>{% endif %}
+      {% if m.media %}
+        {% if m.img %}<img class="tgmsg__img" src="/tgmedia/{{ chat }}_{{ m.id }}.jpg" alt="{{ m.media }}" loading="lazy">
+        {% else %}<div class="tgmsg__media">{{ {'фото': '📷 фото', 'видео': '🎬 видео', 'кружок': '⭕ кружок', 'голос': '🎤 голосовое', 'файл': '📎 файл'}.get(m.media, m.media) }}</div>{% endif %}
+      {% endif %}
+      {% if m.html %}<div class="tgmsg__text">{{ m.html | safe }}</div>{% endif %}
+      <div class="tgmsg__meta">
+        <button type="button" class="tgmsg__replybtn" data-reply="{{ m.id }}" data-who="{{ m.who }}" title="Ответить на это сообщение">ответить</button>
+        <span>{{ m.at.strftime('%H:%M') }}</span>
+      </div>
+    </div>
+  </div>
+{% else %}{% if not older %}
+  <p class="tgempty">Сообщений пока нет — или чат ещё не читался. Нажмите «Обновить».</p>{% endif %}
+{% endfor %}

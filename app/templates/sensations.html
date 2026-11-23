@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Сенсационные новости · Вершина{% endblock %}
+{% block body %}
+{% set st = x.settings %}
+<div class="head">
+  <h1><span class="brace">{</span>Сенсационные новости<span class="brace">}</span></h1>
+  <p class="head__meta">Оплата в Тильде → пост о вовлечении с фото того, кто вовлёк, и фото чата «вовлекли N».
+    Картой — сразу; безнал — после «оплата пришла» в «Безналичных оплатах». Чаты читаются раз в минуту.</p>
+</div>
+{% if msg %}<p class="limit">{{ msg }}</p>{% endif %}
+
+<div class="section"><h2>Настройки</h2>
+  <p>Пока идёт проверка — всё в тестовую группу «Сенсационные новости бот»</p></div>
+<div class="surface">
+  <div style="display:flex;gap:var(--space-m);flex-wrap:wrap;align-items:flex-start">
+    {% macro chatpick(name, value) %}
+    <select name="{{ name }}">
+      {% if (value | int) not in x.known %}<option value="{{ value }}" selected>{{ value }} — нет в списке чатов аккаунта</option>{% endif %}
+      {% for id, t in x.known.items() %}<option value="{{ id }}" {{ 'selected' if id == (value | int) }}>{{ t }}</option>{% endfor %}
+    </select>
+    {% endmacro %}
+    <form method="post" action="/sensations/settings" style="flex:1;min-width:20rem;margin:0">
+      <div class="filters" style="margin:0 0 var(--space-sm)">
+        <label>Публиковать сами<select name="on">
+          <option value="0" {{ 'selected' if st['sens:on'] != '1' }}>нет — только показывать заказы</option>
+          <option value="1" {{ 'selected' if st['sens:on'] == '1' }}>да — по оплате сразу</option></select></label>
+      </div>
+      <h3 style="margin:0 0 var(--space-3xs)">Вовлёк участник</h3>
+      <p class="tag" style="margin:0 0 var(--space-2xs)">Новость — в общий чат потока, +1 в копилку, меняется фото чата «вовлекли N»</p>
+      <div class="filters" style="margin:0 0 var(--space-sm)">
+        <label class="grow">Чат для новостей участников{{ chatpick('chat', st['sens:chat']) }}</label>
+        <label class="grow">Чей фото менять{{ chatpick('photo_chat', st['sens:photo_chat']) }}</label>
+        <label>Менять фото<select name="avatar">
+          <option value="1" {{ 'selected' if st['sens:avatar'] == '1' }}>да</option>
+          <option value="0" {{ 'selected' if st['sens:avatar'] != '1' }}>нет</option></select></label>
+        <label>Вовлекли сейчас<input name="count" type="number" min="0" value="{{ st['sens:count'] }}" style="width:6rem"></label>
+        <label>Планка<input name="goal" type="number" min="0" value="{{ st['sens:goal'] }}" style="width:6rem"></label>
+      </div>
+      <h3 style="margin:0 0 var(--space-3xs)">Вовлёк ментор</h3>
+      <p class="tag" style="margin:0 0 var(--space-2xs)">Новость — в чат менторов, как мотивационная. В копилку потока не идёт, фото не меняет; счёт — отдельный</p>
+      <div class="filters" style="margin:0 0 var(--space-sm)">
+        <label class="grow">Чат для новостей менторов{{ chatpick('mentor_chat', st['sens:mentor_chat']) }}</label>
+        <label>Менторы вовлекли<input name="mentor_count" type="number" min="0" value="{{ st['sens:mentor_count'] }}" style="width:6rem"></label>
+      </div>
+      <button type="submit">Сохранить</button>
+    </form>
+    <figure style="margin:0;text-align:center">
+      <img src="/sensations/avatar.jpg?n={{ (st['sens:count'] | int) + 1 }}&g={{ st['sens:goal'] }}" alt="следующее фото чата"
+           width="200" height="200" style="border-radius:50%;display:block">
+      <figcaption class="tag">следующее фото чата</figcaption>
+    </figure>
+  </div>
+  <p class="tag" style="margin-top:var(--space-xs)">
+    Замок отправки: <b>{{ {'off': 'закрыт', 'test': 'только тестовые чаты', 'on': 'открыт везде'}[mode] }}</b>.
+    Чат участников — {% if allowed %}<span class="state">можно писать</span>{% else %}<span class="state state--lost">писать нельзя</span>{% endif %},
+    фото — {% if photo_allowed %}<span class="state">можно менять</span>{% else %}<span class="state state--lost">менять нельзя</span>{% endif %},
+    чат менторов — {% if mentor_allowed %}<span class="state">можно писать</span>{% else %}<span class="state state--lost">писать нельзя</span>{% endif %}.
+    {% if is_admin and mode == 'test' and not (allowed and photo_allowed and mentor_allowed) %}
+    <form method="post" action="/sensations/allow" style="display:inline"><button type="submit" class="quiet">Открыть эти чаты в тестовом режиме</button></form>
+    {% endif %}
+  </p>
+  <form method="post" action="/sensations/refresh" style="margin-top:var(--space-2xs)"><button type="submit" class="quiet">Проверить Тильду сейчас</button></form>
+</div>
+
+<div class="section"><h2>Заказы из Тильды</h2>
+  <p>Последние 80. «Архив» — пришли до включения, сами не публикуются: можно опубликовать для проверки</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Когда</th><th>Кто оплатил</th><th>Оплата</th><th>Кто вовлёк</th><th>Статус</th><th></th></tr></thead>
+  <tbody>
+  {% for o in x.orders %}
+  <tr>
+    <td class="nowrap">{{ o.at[:16] | replace('T', ' ') }}<span class="sub">№{{ o.order_no or '—' }}</span></td>
+    <td>{{ o.name or '—' }}<span class="sub">{{ o.city or '' }}{% if o.tg %} · {{ o.tg }}{% endif %}</span></td>
+    <td>{{ o.kind }}{% if o.amount %}<span class="sub">{{ '{:,}'.format(o.amount).replace(',', ' ') }} ₽</span>{% endif %}
+      {% if o.paid_note %}<span class="sub">{{ o.paid_note }}</span>{% endif %}</td>
+    <td>«{{ o.engaged or '—' }}»
+      <span class="sub">{% if o.who and o.sure %}→ {{ o.who.name }}{% elif o.who %}похоже: {{ o.who.name }}{% elif o.near %}похожие: {{ o.near | map(attribute='name') | join(', ') }}{% else %}не нашёл в потоках{% endif %}</span></td>
+    <td>{% if o.status == 'опубликовано' %}<span class="state">опубликовано</span><span class="sub">{{ 'менторы вовлекли' if (o.person_id or 0) < 0 else 'вовлекли' }} {{ o.count_after }}</span>
+      {% elif o.status in ('ошибка', 'кто вовлёк?') %}<span class="state state--lost">{{ o.status }}</span>
+      {% else %}{{ o.status }}{% endif %}
+      {% if o.note %}<span class="sub">{{ o.note }}</span>{% endif %}</td>
+    <td>
+      {% if o.status not in ('опубликовано', 'публикуется') %}
+      <form method="post" action="/sensations/{{ o.id }}" class="filters" style="margin:0;flex-wrap:nowrap">
+        <select name="pid" style="max-width:14rem">
+          <option value="">{{ o.who.name if o.who else '— кто вовлёк —' }}</option>
+          <option value="none">без вовлёкшего</option>
+          {% for p in x.people %}<option value="{{ p.id }}">{{ p.name }} · {{ p.flow }}</option>{% endfor %}
+        </select>
+        <button type="submit" name="act" value="publish" data-confirm="Опубликовать новость? Участник — в «{{ x.known.get(st['sens:chat'] | int, st['sens:chat']) }}» и смена фото; ментор — в «{{ x.known.get(st['sens:mentor_chat'] | int, st['sens:mentor_chat']) }}».">Опубликовать</button>
+        {% if o.status == 'ждёт оплаты' %}<button type="submit" name="act" value="paid" class="quiet">Оплата пришла</button>{% endif %}
+        {% if o.status not in ('пропущено', 'повтор', 'архив') %}<button type="submit" name="act" value="skip" class="quiet">Пропустить</button>{% endif %}
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">Заказов пока нет — платформа ещё не читала чат Тильды.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if x.bank %}
+<div class="section"><h2>«Оплата пришла» в чате безнала</h2><p>Последние 20 сообщений, которые платформа поняла как оплату</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Когда</th><th>Кто</th><th>Сообщение</th><th>Чей заказ</th></tr></thead>
+  <tbody>
+  {% for b in x.bank %}
+  <tr><td class="nowrap">{{ b.at[:16] | replace('T', ' ') }}</td><td>{{ b.sender }}</td><td>{{ b.text[:160] }}</td>
+    <td>{% if b.order_id %}<span class="state">заказ найден</span>{% else %}<span class="state state--lost">{{ b.note or 'ещё не разобрано' }}</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<script>
+  // публикация уходит в телеграм — спросить перед отправкой
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-confirm]");
+    if (b && !confirm(b.dataset.confirm)) e.preventDefault();
+  });
+</script>
+{% endblock %}

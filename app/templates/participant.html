@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} · Вершина{% endblock %}
+{% block body %}
+{% from "_ava.html" import ava %}
+<div class="head head--ava">
+  {{ ava(p.user_id, p.name, photo, "ava--lg") }}
+  <div>
+  <h1><span class="brace">{</span>{{ p.name }}<span class="brace">}</span></h1>
+  {% if show_talk %}
+  <p class="head__meta">
+    {% if p.username %}@{{ p.username }} · {% endif %}id {{ p.user_id }} ·
+    в переписке {{ p.first_seen|d }} — {{ p.last_seen|d }} ·
+    <span class="state {{ 'state--quiet' if p.status == 'притих' else 'state--lost' if p.status == 'выпал' else 'state--done' if p.status == 'поток завершён' else '' }}">{{ p.status }}{% if p.silent_days %}, молчит {{ p.silent_days }} дн.{% endif %}</span>
+    {% if mentors %} · ментор: {{ mentors | join(', ') }}{% endif %}
+    {% if own %} · это вы{% endif %}
+  </p>
+  {% else %}
+  <p class="head__meta">Ваше участие в потоке{% if team %} · группа
+    «{{ team.title }}»{% if team.flow %}, поток {{ team.flow }}{% endif %}{% endif %}</p>
+  {% endif %}
+  </div>
+</div>
+
+{% if mentor_view %}
+<p class="limit"><b>Карточка для ментора.</b> Наблюдения по чатам, без оценок и диагнозов.
+  Деньги участника не показываются. Подсказки к разбору появятся вместе
+  с опросником — их содержание утверждают психологи сообщества.</p>
+{% endif %}
+
+{% if show_talk %}
+<div class="figures">
+  <div><div class="figure__n">{{ p.messages|fmt }}</div><div class="figure__k">сообщений</div></div>
+  <div><div class="figure__n">{{ p.circles|fmt }}</div><div class="figure__k">кружков{% if p.voice %} и {{ p.voice }} голосовых{% endif %}</div></div>
+  {% if show_talk %}
+  <div><div class="figure__n">{{ p.audio_min }}<small> мин</small></div><div class="figure__k">речи расшифровано</div></div>
+  {% else %}
+  <div><div class="figure__n">{{ p.active_months }}</div><div class="figure__k">месяцев в потоке</div></div>
+  {% endif %}
+  <div class="{{ 'figure--flag' if p.trend < 0 }}"><div class="figure__n">{{ p.last14 }}<small> / {{ p.prev14 }}</small></div>
+    <div class="figure__k">за 14 дней и за 14 дней до этого</div></div>
+</div>
+{% endif %}
+
+<div class="section" id="dengi"><h2>{% if show_money %}Вовлечения и деньги{% else %}Вовлечения{% endif %}</h2>
+  <p>{% if may_edit %}Записи вносятся руками; позже сюда будет писать источник, который видит приход денег{% else %}Учёт ведёт координатор{% endif %}</p></div>
+
+<div class="surface">
+  <div class="figures" style="margin:0 0 var(--space-md);border:none;padding:0">
+    <div><div class="figure__n">{{ totals.count }}</div><div class="figure__k">вовлечений</div></div>
+    {% if show_money %}
+    <div><div class="figure__n figure__n--money">{{ totals.brought|money }}</div><div class="figure__k">принёс{% if totals.paid != totals.brought %}, из них оплачено {{ totals.paid|money }}{% endif %}</div></div>
+    <div class="{{ 'figure--flag' if totals.fines }}"><div class="figure__n figure__n--money">{{ totals.fines|money }}</div><div class="figure__k">штрафов</div></div>
+    <div><div class="figure__n figure__n--money">{{ totals.net|money }}</div><div class="figure__k">итого</div></div>
+    {% endif %}
+  </div>
+
+  {% if team %}
+  <p class="head__meta" style="margin:0 0 var(--space-sm)">Группа:
+    {% if show_talk %}<a href="/teams">{{ team.title }}</a>{% else %}<a href="/my-team">{{ team.title }}</a>{% endif %}
+    {% if team.flow %} · поток {{ team.flow }}{% endif %}</p>
+  {% endif %}
+
+  {% if involvements %}
+  <h3>Вовлечения</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Когда</th><th>Кого</th>{% if show_money %}<th class="num">Сумма</th><th>Статус</th>{% endif %}
+      <th>Заметка</th>{% if may_edit %}<th>Внёс</th><th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in involvements %}
+    <tr>
+      <td>{{ r.happened|d }}</td>
+      <td>{{ r.who or '—' }}</td>
+      {% if show_money %}
+      <td class="num">{{ r.amount|money }}</td>
+      <td><span class="state {{ 'state--quiet' if r.status != 'оплачено' }}">{{ r.status }}</span></td>
+      {% endif %}
+      <td class="tag">{{ r.note or '' }}</td>
+      {% if may_edit %}
+      <td class="tag">{{ r.origin }}{% if r.added_by and r.added_by != r.origin %} · {{ r.added_by }}{% endif %}</td>
+      <td class="right"><form method="post" action="/participants/{{ p.user_id }}/involvement/{{ r.id }}/remove">
+        <button class="quiet">Убрать</button></form></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="head__meta">Вовлечений пока не записано.</p>
+  {% endif %}
+
+  {% if charges %}
+  <h3 style="margin-top:var(--space-md)">Штрафы и прочие движения</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Когда</th><th>Что</th><th class="num">Сумма</th><th>Причина</th>
+      {% if may_edit %}<th>Внёс</th><th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in charges %}
+    <tr>
+      <td>{{ r.happened|d }}</td>
+      <td>{{ r.kind }}</td>
+      <td class="num {{ 'delta--down' if r.amount < 0 }}">{{ r.amount|money }}</td>
+      <td class="tag">{{ r.reason or '' }}</td>
+      {% if may_edit %}
+      <td class="tag">{{ r.added_by or '' }}</td>
+      <td class="right"><form method="post" action="/participants/{{ p.user_id }}/charge/{{ r.id }}/remove">
+        <button class="quiet">Убрать</button></form></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% if may_edit %}
+<form class="filters filters--stack surface" method="post" action="/participants/{{ p.user_id }}/involvement">
+  <label>Дата<input name="happened" type="date" value="{{ today }}"></label>
+  <label>Кого вовлёк<input name="who" placeholder="имя или @username"></label>
+  <label>Сумма, ₽<input name="amount" inputmode="numeric" value="0" style="width:8rem"></label>
+  <label>Статус<select name="status">
+    {% for st in statuses %}<option value="{{ st }}">{{ st }}</option>{% endfor %}</select></label>
+  <label class="grow">Заметка<input name="note" placeholder="необязательно"></label>
+  <button type="submit">Записать вовлечение</button>
+</form>
+
+<form class="filters filters--stack surface" method="post" action="/participants/{{ p.user_id }}/charge">
+  <label>Дата<input name="happened" type="date" value="{{ today }}"></label>
+  <label>Что<select name="kind">
+    {% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select></label>
+  <label>Сумма, ₽<input name="amount" inputmode="numeric" value="0" style="width:8rem"></label>
+  <label class="grow">Причина<input name="reason" placeholder="опоздание на зум"></label>
+  <button type="submit">Записать</button>
+</form>
+{% endif %}
+
+{% if show_talk %}
+<div class="cols">
+  <div class="surface">
+    <h2>Как участвует</h2>
+    <div class="metrics">
+      {% for key, label, unit in labels %}
+      <div><span>{{ label }}</span><b>{{ p.get(key) if p.get(key) is not none else '—' }}{% if unit and p.get(key) is not none %} <i>{{ unit }}</i>{% endif %}</b></div>
+      {% endfor %}
+    </div>
+    {% if show_talk %}
+    <p class="head__meta">Метрики считаются формулами сборщика базы знаний: темп речи — по
+      времени собственно речи, паузы отдельной величиной.</p>
+    {% endif %}
+  </div>
+  <div class="surface">
+    <h2>Активность по неделям</h2>
+    {% set top = (p.by_week.values() | max) if p.by_week else 1 %}
+    <div class="bars" role="img" aria-label="Столбики: сообщения участника по неделям">
+      {% for week, n in p.by_week.items() %}
+      <span style="height: {{ (n / top * 100) | round }}%" title="{{ week }}: {{ n }}"></span>
+      {% endfor %}
+    </div>
+    <p class="head__meta">{{ p.by_week | length }} недель, в самой активной {{ top }} сообщений;
+      последняя неделя выделена.</p>
+
+    <h3 style="margin-top:var(--space-md)">По месяцам</h3>
+    <table>
+      <tbody>
+      {% for month, n in p.by_month.items() %}
+      <tr><td>{{ month|month }}</td><td class="num">{{ n }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:var(--space-md)">В каких чатах</h3>
+    <table>
+      <tbody>
+      {% for title, n in p.chats.items() %}
+      <tr><td>{{ title }}</td><td class="num">{{ n }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if may_analyze %}
+<div class="section" id="razbor"><h2>Разбор участника</h2>
+  <p>Что видно по переписке и как выстроить разговор, чтобы человек включился</p></div>
+
+{% if report and report.status == 'готов' %}
+<div class="surface report">
+  {{ report_html | safe }}
+  <p class="report__meta">Разбор от {{ report.finished_at|stamp }} ·
+    запросил {{ report.requested_login }} ·
+    по {{ report.messages_used }} высказываниям ·
+    движок: {{ 'Claude Code' if report.provider in ('queue', 'cli') else report.provider }}</p>
+  <form method="post" action="/participants/{{ p.user_id }}/analyze">
+    <button class="quiet">Разобрать заново</button>
+  </form>
+</div>
+<p class="limit">Это материал для подготовки к разговору, а не диагностика.
+  Выводы сделаны только по сообщениям в двух чатах — человек шире, чем его переписка.</p>
+
+{% elif report and report.status == 'ожидает' %}
+<div class="surface">
+  <p><b>Запрос в очереди</b> с {{ report.created_at|stamp }}, собрано
+    {{ report.messages_used }} высказываний ({{ report.material_chars|fmt }} знаков).</p>
+  <p class="head__meta" style="margin:0">Разбор делает Claude Code:
+    <code>python3 analyze.py list</code> покажет очередь. Когда ответ сохранён,
+    он появляется здесь — страницу достаточно обновить.</p>
+</div>
+
+{% elif report and report.status == 'ошибка' %}
+<div class="surface">
+  <p><b>Разбор не получился.</b> {{ report.error }}</p>
+  <form method="post" action="/participants/{{ p.user_id }}/analyze">
+    <button>Попробовать снова</button>
+  </form>
+</div>
+
+{% else %}
+<div class="surface">
+  <p>Модель прочитает высказывания участника и метрики его поведения и ответит
+    на вопрос куратора: как этот человек участвует, что им движет, каким тоном
+    и с чего начинать разговор, чтобы он включился, — и что, судя по переписке,
+    не сработает.</p>
+  <form method="post" action="/participants/{{ p.user_id }}/analyze">
+    <button>Разобрать участника</button>
+  </form>
+  <p class="head__meta" style="margin:var(--space-2xs) 0 0">В модель уходят
+    высказывания этого участника и его метрики — до 40 000 знаков, начиная
+    с самых свежих. Запуск записывается в журнал доступа.</p>
+</div>
+{% endif %}
+{% endif %}
+
+
+{% include "_reviews.html" %}
+
+<div class="section" id="portret"><h2>{% if own %}Ваш портрет{% else %}Портрет участнику{% endif %}</h2>
+  <p>{% if own %}Взгляд со стороны на то, как вы работаете в потоке{% else %}Текст, который видит сам участник: как он работает, в чём силён, что тормозит{% endif %}</p></div>
+
+{% if portrait and portrait.status == 'готов' %}
+<div class="surface report">
+  {{ portrait_html | safe }}
+  <p class="report__meta">Собран {{ portrait.finished_at|stamp }}{% if not own %} ·
+    запросил {{ portrait.requested_login }}{% endif %}</p>
+  {% if may_edit %}
+  <form method="post" action="/participants/{{ p.user_id }}/portrait">
+    <button class="quiet">Собрать заново</button>
+  </form>
+  {% endif %}
+</div>
+<p class="limit">Это взгляд со стороны, а не диагностика.
+  {% if own %}Опросник появится позже — тогда портрет будет строиться не только
+  по вашему участию в потоке.{% endif %}</p>
+
+{% elif portrait and portrait.status == 'ожидает' %}
+<div class="surface">
+  <p style="margin:0">{% if own %}Портрет готовится.{% else %}Запрос в очереди
+    с {{ portrait.created_at|stamp }}; когда ответ сохранён, участник видит его сам.{% endif %}</p>
+</div>
+
+{% elif own %}
+<div class="surface">
+  <p style="margin:0">Портрета пока нет — он появится, когда наберётся достаточно
+    вашего участия в потоке.</p>
+</div>
+{% else %}
+<div class="surface">
+  <p>Отдельный текст для самого участника: как он работает, в чём его сила, что
+    тормозит и что стоит попробовать в этом потоке. Без советов, как с ним
+    обращаться, — это его текст, а не инструкция куратору.</p>
+  <p class="head__meta">Материал:
+    <span class="state {{ 'state--quiet' if material.level == 'скудно' else 'state--lost' if material.level == 'мало' else '' }}">{{ material.level }}</span>
+    — {{ material.reason }}.</p>
+  {% if may_edit %}
+    {% if material.level == 'мало' %}
+    <p class="head__meta" style="margin:0"><b>Собрать нельзя.</b> На таком объёме
+      портрет будет догадкой. Появится больше участия — кнопка станет доступна.</p>
+    {% else %}
+    <form method="post" action="/participants/{{ p.user_id }}/portrait">
+      <button>Собрать портрет участнику</button>
+      {% if material.level == 'скудно' %}
+      <p class="head__meta" style="margin:var(--space-2xs) 0 0">Материала немного:
+        портрет выйдет коротким, часть разделов останется без выводов.</p>
+      {% endif %}
+    </form>
+    {% endif %}
+  {% else %}
+  <p class="head__meta" style="margin:0">Собирает координатор.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="section" id="celi"><h2>{% if own %}Ваши цели{% else %}Цели и запрос участника{% endif %}</h2>
+  <p>{% if own %}Что вы хотите получить от мастермайнда — это видят координатор и ваш ментор{% else %}Заполняет сам участник; координатор может дописать{% endif %}</p></div>
+
+{% if may_edit_self %}
+<form class="surface" method="post" action="/participants/{{ p.user_id }}/profile">
+  <label style="display:block;margin-bottom:var(--space-sm)">Цели на мастермайнд
+    <textarea name="goals" rows="4" style="width:100%;margin-top:2px"
+      placeholder="Например: выйти из операционки и запустить второе направление к декабрю">{{ self_profile.goals if self_profile and self_profile.goals else '' }}</textarea></label>
+  <label style="display:block;margin-bottom:var(--space-sm)">Чем занимаетесь
+    <textarea name="about" rows="3" style="width:100%;margin-top:2px"
+      placeholder="Ниша, обороты, роль в бизнесе">{{ self_profile.about if self_profile and self_profile.about else '' }}</textarea></label>
+  <label style="display:block;margin-bottom:var(--space-sm)">Какая помощь нужна от клуба
+    <textarea name="need" rows="3" style="width:100%;margin-top:2px"
+      placeholder="Какой человек или какой опыт вам сейчас нужен">{{ self_profile.need if self_profile and self_profile.need else '' }}</textarea></label>
+  <button type="submit">Сохранить</button>
+  {% if self_profile %}
+  <p class="head__meta" style="margin:var(--space-2xs) 0 0">Обновлено
+    {{ self_profile.updated_at|stamp }}{% if self_profile.updated_by %} ·
+    {{ self_profile.updated_by }}{% endif %}</p>
+  {% endif %}
+</form>
+{% elif self_profile and (self_profile.goals or self_profile.about or self_profile.need) %}
+<div class="surface">
+  {% if self_profile.goals %}<h3>Цели на мастермайнд</h3><p class="talk__body">{{ self_profile.goals }}</p>{% endif %}
+  {% if self_profile.about %}<h3>Чем занимается</h3><p class="talk__body">{{ self_profile.about }}</p>{% endif %}
+  {% if self_profile.need %}<h3>Какая помощь нужна</h3><p class="talk__body">{{ self_profile.need }}</p>{% endif %}
+  <p class="report__meta">Обновлено {{ self_profile.updated_at|stamp }}</p>
+</div>
+{% else %}
+<div class="surface"><p style="margin:0">Участник пока ничего не заполнил.</p></div>
+{% endif %}
+
+
+{% include "_goals.html" %}
+
+{% if show_talk %}
+<div class="section"><h2>Высказывания</h2>
+  <p>{{ total|fmt }} записей, кружки и голосовые — расшифровками</p></div>
+
+<form class="filters" method="get">
+  <select name="kind">
+    <option value="" {{ 'selected' if not kind }}>Текст и голос</option>
+    <option value="voice" {{ 'selected' if kind == 'voice' }}>Только кружки и голосовые</option>
+  </select>
+  <select name="chat">
+    <option value="">Оба чата</option>
+    {% for c in chats %}<option value="{{ c.id }}" {{ 'selected' if chat == c.id }}>{{ c.title }}</option>{% endfor %}
+  </select>
+  <button type="submit">Показать</button>
+</form>
+
+<div class="surface">
+  {% for m in rows %}
+  <div class="talk {{ 'talk--voice' if m.spoken }}">
+    <div class="talk__meta">
+      <span>{{ m.kind }}{% if m.duration %}, {{ m.duration }} с{% endif %}</span>
+      <span>{{ m.when }}</span>
+      <span>{{ m.chat }}</span>
+      {% if m.reply_to %}<a href="/message/{{ m.chat_id }}/{{ m.reply_to }}">в ответ на сообщение</a>{% endif %}
+      <a href="/message/{{ m.chat_id }}/{{ m.msg_id }}">контекст</a>
+    </div>
+    <div class="talk__body">{{ m.text }}</div>
+  </div>
+  {% else %}
+  <p style="margin:0">Под этот фильтр высказываний нет.</p>
+  {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<div class="pager">
+  {% if page_no > 1 %}<a href="?page_no={{ page_no - 1 }}&kind={{ kind }}&chat={{ chat or '' }}">Назад</a>{% endif %}
+  <span>страница {{ page_no }} из {{ pages }}</span>
+  {% if page_no < pages %}<a href="?page_no={{ page_no + 1 }}&kind={{ kind }}&chat={{ chat or '' }}">Дальше</a>{% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

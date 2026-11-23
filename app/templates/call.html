@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Созвоны · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <p class="head__meta" style="margin:0 0 var(--space-2xs)"><a href="/calls">← Все созвоны</a></p>
+  <h1><span class="brace">{</span>{{ title }}<span class="brace">}</span></h1>
+  <p class="head__meta">{{ c.when.strftime('%d.%m.%Y, %H:%M') if c.when else '' }} · {{ (c.secs // 60) | int }} мин
+    {% if c.platform %} · {{ c.platform }}{% endif %}{% if c.flow %} · поток {{ c.flow }}{% if c.flow_how and c.flow_how != 'вручную' %} <span class="tag">({{ c.flow_how }})</span>{% endif %}{% else %} · вне потоков{% endif %}
+    · {{ c.turns | length }} реплик
+    {% if c.docx %} · <a href="/calls/{{ c.id }}/word" download>Скачать Word</a>{% endif %}</p>
+</div>
+
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+{% if organizer %}
+<form class="filters" method="post" action="/calls/{{ c.id }}/flow">
+  <label>Поток встречи
+    <select name="flow" onchange="this.form.submit()">
+      <option value="" {{ 'selected' if c.flow_how != 'вручную' }}>определять самой{% if c.flow_how != 'вручную' %}: {{ c.flow or 'не определён' }}{% endif %}</option>
+      {% for n in flow_names %}<option value="{{ n }}" {{ 'selected' if c.flow_how == 'вручную' and c.flow == n }}>{{ n }}</option>{% endfor %}
+      <option value="-" {{ 'selected' if c.flow_how == 'вручную' and not c.flow }}>вне потоков</option>
+    </select></label>
+</form>
+{% endif %}
+
+<nav class="tabs cardtabs" data-tabs aria-label="Разделы встречи">
+  <a href="#who" data-tab="who" class="is-on">Кто был</a>
+  <a href="#text" data-tab="text">Расшифровка</a>
+  <a href="#people" data-tab="people">По участникам{% if digest %} <span class="tag">{{ digest|length }}</span>{% endif %}</a>
+  <a href="#summary" data-tab="summary">Выжимка{% if not c.summary %} <span class="tag">нет</span>{% endif %}</a>
+</nav>
+
+<section data-panel="who" id="who">
+  {% if organizer and (can_guess or run) %}
+  <div class="surface guessbar"{% if run and run.status == 'идёт' %} data-running{% endif %}>
+    <div>
+      <b>Кто есть кто по разговору</b>
+      <p class="tag" style="margin:var(--space-3xs) 0 0">
+        {% if run and run.status == 'идёт' %}Claude читает расшифровку — около минуты, страница обновится сама.
+        {% elif run and run.status == 'готово' %}Разобрано {{ run.at | stamp }}: {{ run.note }}. Подтвердите или отклоните подсказки ниже.
+        {% elif run and run.status == 'ошибка' %}Не получилось: {{ run.note }}
+        {% elif not claude_ok %}Claude не подключён: подключите его в Стенографе — и неузнанных можно будет разобрать по тому, как к ним обращаются.
+        {% else %}Claude прочитает, как к неузнанным обращаются и что они рассказывают, и предложит, кто это.{% endif %}</p>
+    </div>
+    {% if can_guess and claude_ok and not (run and run.status == 'идёт') %}
+    <form method="post" action="/calls/{{ c.id }}/guess"><button class="{{ 'quiet' if run }}">{{ 'Разобрать заново' if run else 'Разобрать, кто есть кто' }}</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% set top = (c.people | map(attribute='secs') | max) if c.people else 1 %}
+  <div class="surface surface--flush scroll">
+  <table>
+    <thead><tr><th>Кто</th><th>В Зуме подписан</th><th>Говорил</th><th class="num">Реплик</th>{% if organizer %}<th>Кто это</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for p in c.people %}
+    <tr>
+      <td>
+        {% if p.kind == 'участник' %}
+          {% if visible_cards is none or p.ref in visible_cards %}<a href="/participants/{{ p.ref }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}
+          <span class="sub">участник{% if p.flow %} {{ p.flow }}{% endif %}</span>
+        {% elif p.kind == 'команда' %}{{ p.name }}<span class="sub">команда потока</span>
+        {% elif p.kind == 'чужой' %}<span class="tag">{{ p.label }}</span><span class="sub">не из потока</span>
+        {% else %}<span class="tag">не узнан</span>{% endif %}
+        {% if p.how == 'догадка' %}<span class="sub" title="Узнан по одному имени или фамилии — проверьте">похоже</span>{% endif %}
+        {% if p.how == 'вручную' and p.scope == 'встреча' %}<span class="sub">отмечен в этой встрече</span>{% endif %}
+        {% set g = guesses.get(p.label) %}
+        {% if g and g.status == 'предложено' and g.kind and p.how in ('—', 'догадка') %}
+        <div class="guess guess--{{ {'высокая': 'hi', 'средняя': 'mid'}.get(g.confidence, 'lo') }}">
+          <p class="guess__who">Похоже, это <b>{{ names_by_ref.get((g.kind, g.ref), '?') }}</b>
+            <span class="pill">{{ g.confidence }} уверенность</span></p>
+          {% for e in g.evidence %}<p class="guess__quote">{{ e }}</p>{% endfor %}
+          {% if g.why %}<p class="tag" style="margin:0">{{ g.why }}</p>{% endif %}
+          <form method="post" action="/calls/{{ c.id }}/guess/decide" class="guess__act">
+            <input type="hidden" name="label" value="{{ p.label }}">
+            <input type="hidden" name="everywhere" value="{{ '0' if p.generic else '1' }}">
+            <button name="accept" value="1">Да, это он(а)</button>
+            <button name="accept" value="0" class="quiet">Нет</button>
+            <span class="tag">{{ 'запомнится только для этой встречи' if p.generic else 'запомнится для всех встреч' }}</span>
+          </form>
+        </div>
+        {% elif g and g.status == 'предложено' and not g.kind and p.how == '—' %}
+        <p class="sub">по разговору не определить</p>
+        {% endif %}
+      </td>
+      <td class="tag">{{ p.label }}</td>
+      <td class="nowrap"><span class="minimeter"><span style="width:{{ (p.secs / top * 100) | round(1) if top else 0 }}%"></span></span>
+        <span class="tag">{{ (p.secs // 60) | int }} мин {{ (p.secs % 60) | int }} с</span></td>
+      <td class="num">{{ p.turns }}</td>
+      {% if organizer %}
+      <td>
+        <form method="post" action="/calls/{{ c.id }}/who" class="whoform">
+          <input type="hidden" name="label" value="{{ p.label }}">
+          <input type="hidden" name="scope" value="{{ 'встреча' if p.generic else 'везде' }}">
+          <select name="who" onchange="this.form.submit()" aria-label="Кто это" title="{{ 'Подпись общая — отметка только для этой встречи' if p.generic else 'Отметка запомнится для всех встреч' }}">
+            <option value="">{{ 'узнан автоматически' if p.how in ('узнан', 'догадка') else 'не отмечен' }}</option>
+            <option value="чужой:" {{ 'selected' if p.how == 'вручную' and p.kind == 'чужой' }}>не из потока / гость</option>
+            {% for w in who_list %}<option value="{{ w.kind }}:{{ w.ref }}" {{ 'selected' if p.how == 'вручную' and p.kind == w.kind and p.ref == w.ref }}>{{ w.name }}{% if w.flow %} · {{ w.flow }}{% elif w.kind == 'команда' %} · команда{% endif %}</option>{% endfor %}
+          </select>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if organizer %}<p class="limit">Отметка «кто это» запоминается. Уникальная подпись («Ironman», «Azat_…») — для всех встреч;
+    общая («iPhone», «Голос 3», «Виктория») — только для этой: на другой встрече за ней может быть другой человек.</p>{% endif %}
+</section>
+
+<section data-panel="text" id="text" hidden>
+  <div class="filters">
+    <input type="search" class="tr-find" placeholder="Найти в расшифровке" aria-label="Найти в расшифровке">
+    <span class="tag tr-count"></span>
+  </div>
+  {% set names = {} %}
+  {% for p in c.people %}{% set _ = names.update({p.label: (p.name if p.kind else p.label)}) %}{% endfor %}
+  <ol class="surface transcript">
+    {% for t in c.turns %}
+    <li><span class="transcript__t">{{ '%02d:%02d' | format((t.start // 60) | int, (t.start % 60) | int) if t.start < 3600 else '%d:%02d:%02d' | format((t.start // 3600) | int, ((t.start % 3600) // 60) | int, (t.start % 60) | int) }}</span>
+      <b class="transcript__who">{{ names.get(t.who, t.who) }}</b>
+      <span class="transcript__text">{{ t.text }}</span></li>
+    {% endfor %}
+  </ol>
+</section>
+
+<section data-panel="people" id="people" hidden>
+  {% if can_digest or digest_run %}
+  <div class="surface guessbar"{% if digest_run and digest_run.status == 'идёт' %} data-running{% endif %}>
+    <div>
+      <b>Что важно ментору по каждому участнику</b>
+      <p class="tag" style="margin:var(--space-3xs) 0 0">
+        {% if digest_run and digest_run.status == 'идёт' %}Claude читает встречу — пара минут, страница обновится сама.
+        {% elif digest_run and digest_run.status == 'готово' %}Разобрано {{ digest_run.at | stamp }}, {{ digest_run.note }}. Заметки — и в карточках участников; новые сведения ждут «Принять» во вкладке «Информация».
+        {% elif digest_run and digest_run.status == 'ошибка' %}Не получилось: {{ digest_run.note }}
+        {% elif not claude_ok %}Claude не подключён — подключите его в Стенографе.
+        {% else %}Один запрос на всю встречу: Claude читает расшифровку вместе с карточками всех узнанных участников (цели, шаги, прошлый разбор) и пишет по каждому, что рассказал, что сделал, что пообещал.{% endif %}</p>
+    </div>
+    {% if can_digest and claude_ok and not (digest_run and digest_run.status == 'идёт') %}
+    <form method="post" action="/calls/{{ c.id }}/digest"><button class="{{ 'quiet' if digest_run }}">{{ 'Разобрать заново' if digest_run else 'Разобрать по участникам' }}</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% for p in c.people if p.kind == 'участник' and p.ref in digest and (visible_cards is none or p.ref in visible_cards) %}
+  {% set n = digest[p.ref] %}
+  <div class="surface callnote">
+    <h3 style="margin:0"><a href="/participants/{{ p.ref }}">{{ p.name }}</a>{% if n.alarm %} <span class="late">⚠ {{ n.alarm }}</span>{% endif %}</h3>
+    {% if n.note %}<p>{{ n.note }}</p>{% else %}<p class="tag">Почти не говорил(а) на встрече.</p>{% endif %}
+    {% set pr = n.promises | fromjson %}
+    {% if pr %}<p class="tag" style="margin-bottom:0">Пообещал(а):</p><ul style="margin-top:0">{% for x in pr %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% else %}
+  {% if not (can_digest or digest_run) %}<div class="surface"><p style="margin:0">На встрече нет узнанных участников — отметьте во вкладке «Кто был», кто есть кто.</p></div>{% endif %}
+  {% endfor %}
+</section>
+<section data-panel="summary" id="summary" hidden>
+  {% if summary_html %}
+  <div class="surface document">{{ summary_html | safe }}</div>
+  {% else %}
+  <div class="surface"><p style="margin:0">Выжимки нет: в Стенографе не был подключён Claude, когда встреча расшифровалась.
+    Подключите Claude в Стенографе и нажмите там «Сделать выжимку» — она появится здесь.</p></div>
+  {% endif %}
+</section>
+<script src="/static/tabs.js?v={{ v }}" defer></script>
+<script src="/static/transcript.js?v={{ v }}" defer></script>
+{% endblock %}

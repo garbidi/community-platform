@@ -1,0 +1,9 @@
+# Окружение сборщика: выгрузка телеграма и распознавание речи.
+# Ставится с --system-site-packages, поэтому torch и numpy берутся
+# системные, а не вторым экземпляром.
+telethon>=1.36
+opentele>=1.15
+pyaes>=1.6
+tgcrypto>=1.2
+faster-whisper>=1.0
+ctranslate2>=4.0

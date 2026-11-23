@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход · Вершина</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <link rel="icon" href="/static/logo-navy.svg">
+  <style>
+    /* логотип, который рисует кисть */
+    .brushlogo { position: relative; width: min(36rem, 100%); aspect-ratio: 1234.06 / 238.45; cursor: pointer; }
+    .brushlogo canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .brushlogo.cam { animation: cam 1.6s cubic-bezier(.2, .8, .2, 1) both; }
+    @keyframes cam { from { transform: scale(1.08) translateY(4px); filter: blur(5px); opacity: .2; } to { transform: none; filter: none; opacity: 1; } }
+    .brushlogo noscript img { width: 100%; }
+    .poster__claim span { display: block; overflow: hidden; }
+    .poster__claim i { display: block; font-style: normal; transform: translateY(105%); }
+    .logo-done .poster__claim i { animation: claim .9s cubic-bezier(.2, .8, .2, 1) forwards; }
+    .logo-done .poster__claim span:nth-child(2) i { animation-delay: .15s; }
+    .logo-done .poster__claim span:nth-child(3) i { animation-delay: .3s; }
+    .poster__claim b { color: var(--color-accent); font-weight: inherit; }
+    @keyframes claim { to { transform: none; } }
+    .poster__claim { font-size: clamp(2rem, 1rem + 3.4vw, 4.2rem); max-width: 14ch; }
+    @media (prefers-reduced-motion: reduce) {
+      .brushlogo.cam, .poster__claim i { animation: none; transform: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="poster logo-done">
+  <div class="poster__brand">
+    <img class="brandlogo" src="/static/logo-cream.svg" alt="Вершина" style="width:min(24rem,100%)">
+    <p class="poster__claim"><span><i>Рост</i></span><span><i>начинается</i></span><span><i>с <b>команды</b></i></span></p>
+  </div>
+  <div class="poster__form">
+    <h1>Вход</h1>
+    {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
+    <form method="post" action="/login">
+      <label>Логин
+        <input name="login" autocomplete="username" autofocus required></label>
+      <label>Пароль
+        <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Войти</button>
+    </form>
+    {% if tg_bot %}
+    <div class="tglogin">
+      <p class="tag">или</p>
+      <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="{{ tg_bot }}"
+              data-size="large" data-radius="8" data-auth-url="/login/tg"></script>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

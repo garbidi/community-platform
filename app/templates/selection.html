@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Отбор в {{ x.flow.name }} · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <p class="head__meta" style="margin:0 0 var(--space-2xs)"><a href="/flows/{{ x.flow.id }}">← {{ x.flow.name }}</a></p>
+  <h1><span class="brace">{</span>Отбор в {{ x.flow.name }}<span class="brace">}</span></h1>
+  <p class="head__meta">Участники 4-дневного мастермайнда — все, кто в зале, из таблицы Лилии
+    {%- if x.sync %} · {{ 'обновлено' if x.sync.ok else 'не обновилось' }} {{ x.sync.at|stamp }}{% endif %}.
+    Перетащите карточку в колонку, откройте её или нажмите 1–4 на выбранной.</p>
+  {% if x.sync and not x.sync.ok %}<p class="limit">{{ x.sync.message }}</p>{% endif %}
+</div>
+
+
+<section class="tally" aria-label="Итоги отбора">
+  <div class="tally__bar" aria-hidden="true">
+    {% for k, title, v in x.lanes %}<span class="tally__seg tally__seg--{{ k }}" data-seg="{{ k }}"
+      style="flex-grow: {{ x.counts[k] }}"></span>{% endfor %}
+  </div>
+  <dl class="tally__nums">
+    {% for k, title, v in x.lanes %}
+    <div class="tally__item tally__item--{{ k }}">
+      <dt>{{ title }}</dt><dd data-count="{{ k }}">{{ x.counts[k] }}</dd>
+    </div>
+    {% endfor %}
+    <div class="tally__item tally__item--total"><dt>Всего</dt><dd>{{ x.total }}</dd></div>
+  </dl>
+</section>
+
+<form class="pick-tools" role="search" onsubmit="return false">
+  <input type="search" id="pick-q" placeholder="Имя, ниша, кто вовлёк" aria-label="Поиск" autocomplete="off">
+  <select id="pick-city" aria-label="Город"><option value="">Все города</option>
+    {% for c in x.cities %}<option>{{ c }}</option>{% endfor %}</select>
+  {% if x.mentors %}<select id="pick-mentor" aria-label="Ментор или группа"><option value="">Все менторы и группы</option>
+    {% for m in x.mentors %}<option value="{{ m }}">{{ 'группа ' ~ m if m.isdigit() else m }}</option>{% endfor %}</select>{% endif %}
+  <span class="tag" id="pick-shown" aria-live="polite"></span>
+</form>
+
+<div class="pick" id="pick" data-flow="{{ x.flow.id }}">
+  {% for k, title, v in x.lanes %}
+  <section class="lane lane--{{ k }}" data-lane="{{ k }}" aria-labelledby="lane-{{ k }}">
+    <header class="lane__head"><h2 id="lane-{{ k }}">{{ title }}</h2><span class="lane__n" data-count="{{ k }}">{{ x.counts[k] }}</span></header>
+    <ol class="lane__list" data-list="{{ k }}"></ol>
+    <p class="lane__empty">Перетащите сюда</p>
+  </section>
+  {% endfor %}
+</div>
+
+<aside class="sheet" id="sheet" aria-hidden="true" aria-labelledby="sheet-name" tabindex="-1">
+  <button type="button" class="sheet__close" data-close aria-label="Закрыть">×</button>
+  <div class="sheet__top">
+    <img class="sheet__ava" id="sheet-ava" alt="" width="88" height="88">
+    <div>
+      <h2 id="sheet-name"></h2>
+      <p class="sheet__sub" id="sheet-sub"></p>
+      <p class="sheet__contact" id="sheet-contact"></p>
+    </div>
+  </div>
+  <fieldset class="seg" id="sheet-seg">
+    <legend>Решение</legend>
+    {% for k, title, v in x.lanes %}
+    <label><input type="radio" name="lane" value="{{ k }}"><span>{{ title }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <p class="tag" id="sheet-by"></p>
+  <dl class="sheet__facts" id="sheet-facts"></dl>
+  <a class="sheet__open" id="sheet-open" href="#">Открыть карточку</a>
+</aside>
+<div class="sheet-scrim" id="sheet-scrim" hidden></div>
+
+<script type="application/json" id="pick-data">{{ x.people | tojson }}</script>
+<script src="/static/selection.js?v={{ v }}" defer></script>
+{% endblock %}

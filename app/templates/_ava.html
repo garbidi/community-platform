@@ -1,0 +1,4 @@
+{# Фото участника или его инициалы. has — есть ли скачанная аватарка. #}
+{% macro ava(id, name, has, size='') -%}
+<span class="ava {{ size }}" aria-hidden="true">{% if has %}<img src="/avatar/{{ id }}" alt="" loading="lazy">{% else %}{{ (name or '?').replace('@','').split()[:2]|map('first')|join|upper }}{% endif %}</span>
+{%- endmacro %}

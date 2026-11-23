@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Доступы · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Доступы<span class="brace">}</span></h1>
+  <p class="head__meta">Кто работает в платформе. Ментор и трекер видят участников своих команд —
+    команды назначаются в <a href="/flows">«Потоках»</a>{% if not is_admin %} · вам доступно управление менторами и трекерами{% endif %}</p>
+</div>
+
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+
+{% if issued %}
+<div class="surface proposals">
+  <h3>{{ 'Доступ' if issued|length == 1 else 'Доступы' }} — перешлите каждому его сообщение</h3>
+  <p style="margin:0">Пароль показывается один раз: в базе остаётся только его хэш. Закроете страницу — придётся выдать новый.</p>
+  {% for x in issued %}
+  <div class="issued">
+    <pre class="copybox">{{ x.name }}, вот вход в платформу Вершины: {{ request.base_url }}
+Логин: {{ x.login }}
+Пароль: {{ x.password }}
+Сменить пароль можно в «Настройках» внизу меню.</pre>
+    <button type="button" class="quiet copybtn">Скопировать</button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if s.never %}
+<form class="surface invite" method="post" action="/admin/users/invite"
+      onsubmit="return confirm('Выдать новые пароли выбранным? Если у кого-то уже был пароль, он перестанет действовать.')">
+  <div>
+    <b>Ещё не входили: {{ s.never|length }} из {{ (s.groups[1].people)|length }} менторов</b>
+    <p class="tag" style="margin:var(--space-3xs) 0 var(--space-2xs)">Похоже, доступы им не дошли. Выдайте новые пароли — платформа подготовит по сообщению на каждого.</p>
+    <div class="checklist checklist--inline">
+      {% for p in s.never %}<label><input type="checkbox" name="uid" value="{{ p.id }}" checked> {{ p.name }}</label>{% endfor %}
+    </div>
+  </div>
+  <button>Выдать доступы</button>
+</form>
+{% endif %}
+
+{% for g in s.groups %}
+<div class="section"><h2>{{ g.title }} <span class="tag">{{ g.people|length }}</span></h2></div>
+<div class="surface surface--flush">
+  {% for p in g.people %}
+  <details class="person-row{{ ' is-never' if not p.last and p.role == 'mentor' }}">
+    <summary>
+      <span class="person-row__name"><b>{{ p.name }}</b> <span class="tag">@{{ p.login }}</span>{% if p.id == user.id %} <span class="pill">это вы</span>{% endif %}</span>
+      <span class="person-row__teams">
+        {% if p.role == 'mentor' %}
+          {% for t in p.teams if not t.done %}<a class="whochip whochip--s" href="/teams/{{ t.tid }}">{{ t.flow }} · {{ t.team }}{% if t.role == 'трекер' %} · трекер{% endif %}</a>{% else %}<span class="tag">без команды — никого не видит</span>{% endfor %}
+          {% if p.sees %}<span class="tag">видит {{ p.sees }} уч.</span>{% endif %}
+        {% else %}<span class="tag">{{ roles[p.role] }}</span>{% endif %}
+      </span>
+      <span class="person-row__last">{% if p.last %}<span class="tag">был(а) {{ p.last | stamp }}</span>{% else %}<span class="state state--quiet">ещё не входил(а)</span>{% endif %}</span>
+    </summary>
+    {% if may(p.role) %}
+    <div class="person-row__body">
+      <form class="form" method="post" action="/admin/users/{{ p.id }}">
+        <div class="row2">
+          <label>Имя и фамилия<input name="name" value="{{ p.name }}" required></label>
+          <label>Логин — ник в телеграме<input name="login" value="{{ p.login }}" required></label>
+        </div>
+        {% if is_admin and p.id != user.id %}
+        <label>Роль<select name="role">{% for k, t in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == p.role }}>{{ t }}</option>{% endfor %}</select></label>
+        {% else %}<input type="hidden" name="role" value="{{ p.role }}">{% endif %}
+        <div class="actions-inline">
+          <button>Сохранить</button>
+          <button class="quiet" formaction="/admin/users/{{ p.id }}/password"
+                  onclick="return confirm('Выдать {{ p.name }} новый пароль? Старый перестанет действовать.')">Новый пароль</button>
+          {% if p.id != user.id %}
+          <button class="quiet" formaction="/admin/users/{{ p.id }}/active" name="active" value="0"
+                  onclick="return confirm('Отключить {{ p.name }}? Войти будет нельзя, открытые входы закроются.')">Отключить</button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+    {% else %}
+    <div class="person-row__body"><p class="tag" style="margin:0">Организаторов меняет администратор.</p></div>
+    {% endif %}
+  </details>
+  {% else %}
+  <p style="margin:0;padding:var(--space-sm) var(--space-md)">Пока никого.</p>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<div class="section"><h2>Добавить человека</h2>
+  <p>Логин — ник в телеграме без @. Пароль придумает платформа и покажет один раз готовым сообщением</p></div>
+<form class="form surface" method="post" action="/admin/users" style="max-width:var(--measure)">
+  <div class="row2">
+    <label>Имя и фамилия<input name="name" value="{{ form.name if form else '' }}" required placeholder="Иван Петров"></label>
+    <label>Логин<input name="login" value="{{ form.login if form else '' }}" required placeholder="arut_minasyan"></label>
+  </div>
+  <label>Роль<select name="role">
+    {% for k, t in roles.items() if may(k) %}<option value="{{ k }}" {{ 'selected' if form and form.role == k }}>{{ t }}</option>{% endfor %}
+  </select></label>
+  <button>Добавить</button>
+  <p class="tag" style="margin:0">Ментора потом выберите в команде: «Потоки» → поток → команда → Менторы или Трекер.</p>
+</form>
+
+{% if s.off %}
+<details class="surface" style="margin-top:var(--space-md)">
+  <summary><b>Отключённые и старые учётки</b> <span class="tag">{{ s.off|length }}</span></summary>
+  <table style="margin-top:var(--space-sm)">
+    <tbody>
+    {% for p in s.off %}
+    <tr><td>{{ p.name }} <span class="tag">@{{ p.login }}</span></td>
+      <td class="tag">{{ {'participant': 'участник', 'participant_plus': 'участник, расширенный'}.get(p.role, roles.get(p.role, p.role)) }}</td>
+      <td class="tag">{{ 'отключён' if not p.active else 'работает' }}{% if p.last %} · входил {{ p.last | stamp }}{% endif %}</td>
+      <td>{% if not p.active and may(p.role) %}
+        <form method="post" action="/admin/users/{{ p.id }}/active" style="margin:0"><input type="hidden" name="active" value="1"><button class="quiet">Включить</button></form>
+        {% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
+
+{% if is_admin %}
+<div class="section"><h2>Обслуживание</h2>
+  <p>Нужно после того, как сборщик добавил сообщения или расшифровки</p></div>
+<form class="filters surface" method="post" action="/admin/reindex">
+  <span class="grow">Перестроить поисковый индекс по архиву ММ5 и ММ6.</span>
+  <button type="submit" class="quiet">Перестроить индекс</button>
+</form>
+{% endif %}
+<script src="/static/staff.js?v={{ v }}" defer></script>
+{% endblock %}

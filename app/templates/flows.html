@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Потоки · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Потоки<span class="brace">}</span></h1>
+  <p class="head__meta">Создание и запуск потоков: команды, таблицы деклараций, менторы, чаты. Всё — здесь, без разработчика</p>
+</div>
+
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+
+<div class="flowlist">
+  {% for f in flows %}
+  <a class="surface flowcard{{ ' flowcard--current' if f.is_current }}{{ ' flowcard--done' if f.status == 'завершён' }}" href="/flows/{{ f.id }}">
+    <div class="flowcard__top">
+      <h2>{{ f.name }}</h2>
+      {% if f.is_current %}<span class="pill pill--accent">текущий</span>{% endif %}
+      <span class="pill">{{ f.status }}</span>
+    </div>
+    <p class="head__meta" style="margin:0">
+      {% if f.start or f.finish %}{{ f.start|d if f.start else '…' }} — {{ f.finish|d if f.finish else '…' }} · {% endif %}
+      {{ f.teams }} {{ 'команда' if f.teams % 10 == 1 and f.teams % 100 != 11 else 'команды' if f.teams % 10 in [2,3,4] and f.teams % 100 not in [12,13,14] else 'команд' }}
+      · {{ f.people }} в потоке</p>
+    {% if f.sync and f.status != 'завершён' %}
+    <p class="tag" style="margin:var(--space-2xs) 0 0">{{ 'таблицы обновлены' if f.sync.ok else 'таблицы не обновились' }} {{ f.sync.at|stamp }}</p>
+    {% endif %}
+  </a>
+  {% else %}
+  <div class="surface"><p style="margin:0">Потоков пока нет — создайте первый ниже.</p></div>
+  {% endfor %}
+</div>
+
+<div class="section"><h2>Новый поток</h2>
+  <p>Создайте поток, добавьте команды с таблицами деклараций, проверьте, что всё подтягивается, — и сделайте его текущим в день старта</p></div>
+<form class="form surface" method="post" action="/flows" style="max-width:var(--measure)">
+  <label>Название<input name="name" placeholder="ММ8" required maxlength="40"></label>
+  <label>Тип<select name="kind">
+    <option value="4 дня" selected>4-дневный мастермайнд — с него начинается каждый поток</option>
+    <option value="поток">Основной поток — из тех, кто остался после 4 дней: команды, менторы, трекеры</option></select></label>
+  <div class="row2">
+    <label>Старт<input type="date" name="start"></label>
+    <label>Финиш<input type="date" name="finish"></label>
+  </div>
+  <button type="submit">Создать поток</button>
+</form>
+
+<p class="limit">Закончившиеся ММ5 и ММ6 велись до платформы — их переписка в
+  <a href="/participants?view=archive">«Участниках», вкладка «Архив»</a>.</p>
+{% endblock %}

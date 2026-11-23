@@ -1,0 +1,37 @@
+# Платформа Вершины на общем сервере. HTTPS — у Caddy Компаса
+# (/opt/sites/platform.caddy), сюда он ходит по сети fintablo_default.
+# Данные — ./data: app.sqlite, kb/kb.sqlite, reviews/, mm7.json.
+name: platform
+
+services:
+  web:
+    build: ./src
+    restart: unless-stopped
+    env_file: [.env]
+    # процессы-сироты (claude, расшифровка) подбирает init, без него копятся зомби
+    init: true
+    volumes:
+      - ./data:/data
+      # вход в Claude общий со Стенографом: его data/claude.json (app/claude_env.py)
+      - /opt/stenograf/data/export:/stenograf:ro   # только встречи «Вершины» и вход Claude, см. stenograf/export.py
+      # общая очередь тяжёлых задач сервера со Стенографом (stenograf/heavy.py):
+      # она решает, когда расшифровке хватит памяти и сколько ей взять ядер
+      - /opt/heavy:/heavy
+    # потолок — только от разбега: память делит очередь /heavy. Раньше тут было
+    # 4 ГБ, и вторая расшифровка убивала первую (17.10)
+    mem_limit: 10g
+    # при нехватке памяти на сервере первой гибнет платформа, а не встречи
+    oom_score_adj: 300
+    # вес процессора вчетверо ниже обычного: пока Стенограф простаивает, разборы
+    # берут все ядра, а когда идут встречи — ядра уходят браузерам.
+    # nice внутри контейнера тут не помогает — между контейнерами он не действует
+    cpu_shares: 256
+    expose: ["8000"]
+    networks:
+      edge:
+        aliases: [platform]
+
+networks:
+  edge:
+    name: fintablo_default
+    external: true

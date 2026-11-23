@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Поиск · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Поиск по архиву<span class="brace">}</span></h1>
+  <p class="head__meta"><a href="/participants?view=archive">← Архив: ММ5 и ММ6</a> · ищет по сообщениям и расшифровкам кружков закончившихся потоков{% if hidden_note %} · {{ hidden_note }}{% endif %}</p>
+</div>
+
+<form class="filters" method="get">
+  <input class="grow" name="q" value="{{ q }}" placeholder="Например: операционка" autofocus>
+  <select name="chat">
+    <option value="">Оба чата</option>
+    {% for c in chats %}<option value="{{ c.id }}" {{ 'selected' if chat == c.id }}>{{ c.title }}</option>{% endfor %}
+  </select>
+  <select name="spoken">
+    <option value="all" {{ 'selected' if spoken == 'all' }}>Текст и голос</option>
+    <option value="voice" {{ 'selected' if spoken == 'voice' }}>Только голос</option>
+    <option value="text" {{ 'selected' if spoken == 'text' }}>Только текст</option>
+  </select>
+  <button type="submit">Найти</button>
+</form>
+
+{% if q %}
+<p class="head__meta">Нашлось {{ results|length }}{% if results|length == 60 %} — показаны первые 60{% endif %}</p>
+<div class="surface">
+  {% for r in results %}
+  <div class="talk {{ 'talk--voice' if r.kind != 'текст' }}">
+    <div class="talk__meta">
+      <a href="/participants/{{ r.user_id }}">{{ r.author }}</a>
+      <span>{{ r.kind }}</span>
+      <span>{{ r.when }}</span>
+      <span>{{ r.chat }}</span>
+      <a href="/message/{{ r.chat_id }}/{{ r.msg_id }}">контекст</a>
+    </div>
+    <div class="talk__body">{{ r.excerpt | safe }}</div>
+  </div>
+  {% else %}
+  <p style="margin:0">Ничего не нашлось. Поиск понимает начало слова: «операционк» найдёт
+    и «операционку», а запрос из трёх слов ищет сообщения, где есть все три.</p>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

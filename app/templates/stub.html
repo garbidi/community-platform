@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>{{ title }}<span class="brace">}</span></h1>
+  <p class="head__meta">{{ stage }} — раздел ещё не сделан</p>
+</div>
+<div class="surface">
+  <h2>Что здесь будет</h2>
+  <ul class="list">{% for w in what %}<li>{{ w }}</li>{% endfor %}</ul>
+  <h2 style="margin-top:var(--space-md)">Почему не сейчас</h2>
+  <p style="margin:0;max-width:var(--measure)">{{ why }}</p>
+</div>
+{% endblock %}

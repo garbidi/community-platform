@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Журнал · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Журнал<span class="brace">}</span></h1>
+  <p class="head__meta">Обращений к чужим профилям за неделю: <b>{{ stats.profiles_week }}</b></p>
+</div>
+<p class="limit">Журнал — требование к работе с чувствительными данными: по каждому профилю
+  видно, кто и когда его открывал. Записи из интерфейса не удаляются.</p>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Когда</th><th>Кто</th><th>Роль</th><th>Что сделал</th><th>Над чем</th><th>Подробности</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="tag" style="white-space:nowrap">{{ r.at|stamp }}</td>
+    <td>{{ r.login or '—' }}</td>
+    <td class="tag">{{ r.role or '—' }}</td>
+    <td>{{ r.action }}</td>
+    <td>{{ r.target or '—' }}</td>
+    <td class="tag">{{ r.detail or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Финансы · Вершина{% endblock %}
+{% block body %}
+{% macro rub(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }} ₽{% endmacro %}
+{% macro opform(o, action, label='Сохранить') %}
+<form method="post" action="{{ action }}" class="finform">
+  <input type="hidden" name="back" value="{{ back }}">
+  <label>Вид<select name="kind">{% for k in ['расход', 'приход', 'перевод'] %}<option {{ 'selected' if o.kind == k }}>{{ k }}</option>{% endfor %}</select></label>
+  <label>Сумма, ₽<input name="amount" inputmode="decimal" value="{{ '%g' % o.amount if o.amount else '' }}" required></label>
+  <label>Статус<select name="status">{% for s in ['заявка', 'оплачено', 'поступило', 'отменено'] %}<option {{ 'selected' if o.status == s }}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Проект<select name="project"><option value="">—</option>{% for v in d['проект'] %}<option {{ 'selected' if o.project == v }}>{{ v }}</option>{% endfor %}{% if o.project and o.project not in d['проект'] %}<option selected>{{ o.project }}</option>{% endif %}</select></label>
+  <label>Подпроект<select name="subproject"><option value="">—</option>{% for v in d['подпроект'] %}<option {{ 'selected' if o.subproject == v }}>{{ v }}</option>{% endfor %}{% if o.subproject and o.subproject not in d['подпроект'] %}<option selected>{{ o.subproject }}</option>{% endif %}</select></label>
+  <label>Статья<select name="article"><option value="">—</option>
+    <optgroup label="Расход">{% for v in d['статья расхода'] %}<option {{ 'selected' if o.article == v }}>{{ v }}</option>{% endfor %}</optgroup>
+    <optgroup label="Приход">{% for v in d['статья прихода'] %}<option {{ 'selected' if o.article == v }}>{{ v }}</option>{% endfor %}</optgroup>
+    {% if o.article and o.article not in d['статья расхода'] and o.article not in d['статья прихода'] %}<option selected>{{ o.article }}</option>{% endif %}</select></label>
+  <label>Кошелёк<select name="wallet"><option value="">—</option>{% for v in d['кошелёк'] %}<option {{ 'selected' if o.wallet == v }}>{{ v }}</option>{% endfor %}{% if o.wallet and o.wallet not in d['кошелёк'] %}<option selected>{{ o.wallet }}</option>{% endif %}</select></label>
+  <label class="wide">За что<input name="purpose" value="{{ o.purpose or '' }}"></label>
+  <label>Кому / от кого<input name="counterparty" value="{{ o.counterparty or '' }}"></label>
+  <label>Участник (оплатил)<input name="participant" value="{{ o.participant or '' }}"></label>
+  <label>Кто вовлёк<input name="engaged_by" value="{{ o.engaged_by or '' }}"></label>
+  <label class="wide">Заметка<input name="note" value="{{ o.note or '' }}"></label>
+  <div class="actions-inline"><button type="submit">{{ label }}</button></div>
+</form>
+{% endmacro %}
+
+<div class="head">
+  <h1><span class="brace">{</span>Финансы<span class="brace">}</span></h1>
+  <p class="head__meta">Деньги из чата {% for c in chats %}«{{ c.title }}»{{ ', ' if not loop.last }}{% else %}с чеками (не выбран){% endfor %}:
+    Claude разбирает его в 13:00 и 21:00 по Москве. Видно только администратору.</p>
+</div>
+
+{% if msg %}<p class="limit">{{ msg }}</p>{% endif %}
+
+<div class="finbar">
+  <form method="post" action="/admin/finance/run"><button type="submit" {{ 'disabled' if running }}>{{ 'Разбираю…' if running else 'Разобрать новые сейчас' }}</button></form>
+  <span class="tag">{% if run %}Последний разбор: {{ run.started | stamp }} — {{ run.status }}{% if run.note %}, {{ run.note }}{% endif %}{% else %}Разборов ещё не было{% endif %}</span>
+  {% if running %}<script>setTimeout(function () { location.reload(); }, 15000);</script>{% endif %}
+</div>
+
+<nav class="tabs" aria-label="Разделы">
+  {% for k, t in [('sum', 'Сводка'), ('ask', 'Разобрать'), ('wait', 'Не оплачено'), ('ops', 'Операции'), ('wallets', 'Кошельки'), ('dict', 'Справочник')] %}
+  <a href="?tab={{ k }}{% if month %}&month={{ month }}{% endif %}" class="{{ 'is-on' if tab == k }}">{{ t }}{% if k == 'ask' and s.ask %} <span class="badge">{{ s.ask | length }}</span>{% elif k == 'wait' and s.waiting %} <span class="badge">{{ s.waiting | length }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+
+{% if tab in ('sum', 'ops') %}
+<form class="filters" method="get">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <select name="month" onchange="this.form.submit()">
+    <option value="all">Все месяцы</option>
+    {% for m in months %}<option value="{{ m }}" {{ 'selected' if month == m }}>{{ m | month }}</option>{% endfor %}
+  </select>
+  {% if tab == 'ops' %}
+  <select name="kind"><option value="">Приход и расход</option>{% for k in ['приход', 'расход', 'перевод'] %}<option {{ 'selected' if f.kind == k }}>{{ k }}</option>{% endfor %}</select>
+  <select name="project"><option value="">Все проекты</option>{% for v in d['проект'] + ['—'] %}<option {{ 'selected' if f.project == v }}>{{ v }}</option>{% endfor %}</select>
+  <select name="article"><option value="">Все статьи</option>{% for v in d['статья расхода'] + d['статья прихода'] + ['—'] %}<option {{ 'selected' if f.article == v }}>{{ v }}</option>{% endfor %}</select>
+  <select name="status"><option value="">Любой статус</option>{% for v in ['заявка', 'оплачено', 'поступило', 'отменено'] %}<option {{ 'selected' if f.status == v }}>{{ v }}</option>{% endfor %}</select>
+  <select name="wallet"><option value="">Все кошельки</option>{% for v in d['кошелёк'] + ['—'] %}<option {{ 'selected' if f.wallet == v }}>{{ v }}</option>{% endfor %}</select>
+  <input class="grow" name="q" value="{{ f.q or '' }}" placeholder="Поиск: за что, кому, участник">
+  <button type="submit">Показать</button>
+  {% endif %}
+</form>
+{% endif %}
+
+{% if tab == 'sum' %}
+<div class="figures">
+  <div><div class="figure__n figure__n--money">{{ rub(s.inc) }}</div><div class="figure__k">поступило{% if month and month != 'all' %} за {{ month | month }}{% endif %}</div></div>
+  <div><div class="figure__n figure__n--money">{{ rub(s.out) }}</div><div class="figure__k">оплачено расходов</div></div>
+  <div><div class="figure__n figure__n--money">{{ rub(s.net) }}</div><div class="figure__k">разница</div></div>
+  <div class="{{ 'figure--flag' if s.waiting }}"><div class="figure__n figure__n--money">{{ rub(s.waiting_sum) }}</div><div class="figure__k"><a href="?tab=wait">ждут оплаты: {{ s.waiting | length }}</a></div></div>
+</div>
+{% if s.ask %}<p class="limit"><b>{{ s.ask | length }} на разборе.</b> Claude не уверен, к чему отнести, — <a href="?tab=ask">ответить</a>. Пока не решено, суммы считаются как он предложил.</p>{% endif %}
+
+<div class="section"><h2>По проектам</h2><p>Что прошло по деньгам{% if month and month != 'all' %} за {{ month | month }}{% endif %} и что ещё ждёт оплаты</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Проект</th><th class="num">Поступило</th><th class="num">Расходы</th><th class="num">Итог</th><th class="num">Ждёт оплаты</th></tr></thead>
+  <tbody>
+  {% for name, p in s.projects %}
+  <tr><td><a href="?tab=ops&project={{ name | urlencode if name != 'Без проекта' else '—' }}&month={{ month or 'all' }}">{{ name }}</a></td>
+    <td class="num">{{ rub(p['in']) if p['in'] else '—' }}</td><td class="num">{{ rub(p.out) if p.out else '—' }}</td>
+    <td class="num"><b>{{ rub(p['in'] - p.out) }}</b></td><td class="num">{{ rub(p.wait) if p.wait else '—' }}</td></tr>
+  {% else %}<tr><td colspan="5">Операций пока нет — нажмите «Разобрать новые сейчас».</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="section"><h2>Движение денег (ДДС)</h2><p>По статьям и месяцам — только то, что реально поступило или оплачено</p></div>
+<div class="surface surface--flush scroll">
+<table class="dds">
+  <thead><tr><th>Статья</th>{% for m in s.months %}<th class="num">{{ m | month }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for kind, title in [('приход', 'Поступления'), ('расход', 'Выплаты')] %}
+  <tr class="row--total"><td><b>{{ title }}</b></td>{% for m in s.months %}<td class="num"><b>{{ rub(s.dds_totals[kind][m]) if s.dds_totals[kind][m] else '—' }}</b></td>{% endfor %}</tr>
+  {% for art, row in s.dds[kind] %}
+  <tr><td><a href="?tab=ops&kind={{ kind }}&article={{ art | urlencode if art != 'Без статьи' else '—' }}">{{ art }}</a></td>{% for m in s.months %}<td class="num">{{ rub(row[m]) if row[m] else '—' }}</td>{% endfor %}</tr>
+  {% endfor %}
+  {% endfor %}
+  <tr class="row--total"><td><b>Сальдо</b></td>{% for m in s.months %}<td class="num"><b>{{ rub(s.dds_totals['приход'][m] - s.dds_totals['расход'][m]) }}</b></td>{% endfor %}</tr>
+  </tbody>
+</table>
+</div>
+
+{% elif tab == 'ask' %}
+{% for o in s.ask %}
+<div class="surface finask">
+  <div class="finask__head">
+    <b>{{ o.kind }} {{ rub(o.amount) }}</b> · {{ o.purpose or '' }}
+    <span class="tag">· {{ o.author or '' }}, {{ o.day }}{% if o.link %} · <a href="{{ o.link }}" target="_blank" rel="noopener">сообщение</a>{% endif %}</span>
+  </div>
+  <p class="finask__q">{{ o.question }}</p>
+  <p class="tag">Сейчас: {{ o.project or 'без проекта' }} / {{ o.subproject or '—' }} / {{ o.article or 'без статьи' }}{% if o.wallet %} · {{ o.wallet }}{% endif %}</p>
+  {% for field, vals in o.opts.items() %}
+  <div class="finask__opts"><span class="tag">{{ {'project': 'Проект', 'subproject': 'Подпроект', 'article': 'Статья', 'wallet': 'Кошелёк', 'kind': 'Вид'}[field] }}:</span>
+    {% for v in vals %}<form method="post" action="/admin/finance/op/{{ o.id }}/pick"><input type="hidden" name="field" value="{{ field }}"><input type="hidden" name="back" value="{{ back }}"><button type="submit" class="quiet" name="value" value="{{ v }}">{{ v }}</button></form>{% endfor %}
+  </div>
+  {% endfor %}
+  <p class="tag"><a href="/admin/finance/op/{{ o.id }}?back={{ back | urlencode }}">Поправить всё вручную</a> — тоже закрывает вопрос</p>
+</div>
+{% else %}
+<p class="limit"><b>Вопросов нет.</b> Всё, что Claude разобрал, отнесено уверенно.</p>
+{% endfor %}
+
+{% elif tab == 'wait' %}
+<div class="section"><h2>Не оплачено</h2><p>Заявки, на которые нет ответа с платёжкой. Если оплатили мимо чата — отметьте здесь</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Когда</th><th>Кто просит</th><th>За что</th><th>Проект / статья</th><th class="num">Сумма</th><th></th></tr></thead>
+  <tbody>
+  {% for o in s.waiting %}
+  <tr><td class="nowrap">{{ o.day }}{% if o.link %}<span class="sub"><a href="{{ o.link }}" target="_blank" rel="noopener">в чате</a></span>{% endif %}</td>
+    <td>{{ o.author or '—' }}</td><td>{{ o.purpose or '—' }}{% if o.counterparty %}<span class="sub">{{ o.counterparty }}</span>{% endif %}</td>
+    <td>{{ o.project or '—' }}<span class="sub">{{ o.article or '' }}</span></td><td class="num"><b>{{ rub(o.amount) }}</b></td>
+    <td><form method="post" action="/admin/finance/op/{{ o.id }}/paid" class="actions-inline"><input type="hidden" name="back" value="{{ back }}">
+      <select name="wallet" aria-label="Чем оплатили"><option value="">чем оплатили</option>{% for v in d['кошелёк'] %}<option {{ 'selected' if o.wallet == v }}>{{ v }}</option>{% endfor %}</select>
+      <button type="submit" class="quiet">Оплачено</button></form></td></tr>
+  {% else %}<tr><td colspan="6">Все заявки оплачены.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% elif tab == 'ops' %}
+<details class="surface"><summary><b>Добавить операцию вручную</b> — наличные, оплата мимо чата</summary>
+  {{ opform({'kind': 'расход', 'status': 'оплачено'}, '/admin/finance/op/new', 'Добавить') }}</details>
+<p class="tag">{{ items | length }} операций · поступило {{ rub(items | selectattr('kind', 'equalto', 'приход') | selectattr('status', 'in', ['поступило', 'оплачено']) | sum(attribute='amount')) }} · расходы {{ rub(items | selectattr('kind', 'equalto', 'расход') | selectattr('status', 'equalto', 'оплачено') | sum(attribute='amount')) }}</p>
+<div class="surface surface--flush scroll">
+<table class="finops">
+  <thead><tr><th>Дата</th><th>За что</th><th>Проект / подпроект / статья</th><th>Кошелёк</th><th>Статус</th><th class="num">Сумма</th></tr></thead>
+  <tbody>
+  {% for o in items %}
+  <tr class="{{ 'is-cancel' if o.status == 'отменено' }}">
+    <td class="nowrap">{{ o.day }}{% if o.link %}<span class="sub"><a href="{{ o.link }}" target="_blank" rel="noopener">в чате</a></span>{% endif %}</td>
+    <td><a href="/admin/finance/op/{{ o.id }}?back={{ back | urlencode }}">{{ o.purpose or '—' }}</a>
+      <span class="sub">{{ o.author or '' }}{% if o.counterparty %} → {{ o.counterparty }}{% endif %}
+        {% if o.participant %} · {% if cards[o.id] %}<a href="/participants/{{ cards[o.id] }}">{{ o.participant }}</a>{% else %}{{ o.participant }}{% endif %}{% endif %}
+        {% if o.engaged_by %} · вовлёк {{ o.engaged_by }}{% endif %}</span></td>
+    <td>{{ o.project or '—' }}<span class="sub">{{ o.subproject or '' }}{{ ' · ' if o.subproject and o.article }}{{ o.article or '' }}</span>
+      {% if o.question %}<span class="sub"><a href="?tab=ask" class="late">на разборе</a></span>{% endif %}</td>
+    <td>{{ o.wallet or '—' }}</td>
+    <td><span class="state {{ 'state--quiet' if o.status == 'заявка' else 'state--done' if o.status == 'отменено' }}">{{ o.status }}</span>
+      {% if o.paid_link %}<span class="sub"><a href="{{ o.paid_link }}" target="_blank" rel="noopener">платёжка</a></span>{% endif %}
+      {% if o.edited_by %}<span class="sub">проверил(а) {{ o.edited_by }}</span>{% endif %}</td>
+    <td class="num"><b class="{{ 'fin-in' if o.kind == 'приход' }}">{{ '+' if o.kind == 'приход' }}{{ '⇄ ' if o.kind == 'перевод' }}{{ rub(o.amount) }}</b></td>
+  </tr>
+  {% else %}<tr><td colspan="6">Ничего не нашлось.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% elif tab == 'wallets' %}
+<div class="section"><h2>Кошельки</h2><p>Счёт, карты и наличные: начальный остаток + поступило − оплачено. Начальный остаток и дату, с которой считать, вписываете вы</p></div>
+{% if nowallet %}<p class="limit"><b>У {{ nowallet }} операций не указан кошелёк</b> — в остатки они не попали. <a href="?tab=ops&wallet=—">Показать их</a>.</p>{% endif %}
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Кошелёк</th><th>Начальный остаток и с какой даты</th><th class="num">Поступило</th><th class="num">Оплачено</th><th class="num">Остаток</th></tr></thead>
+  <tbody>
+  {% for w in wallets %}
+  <tr><td><a href="?tab=ops&wallet={{ w.name | urlencode }}">{{ w.name }}</a><span class="sub">{{ w.n }} операций</span></td>
+    <td><form method="post" action="/admin/finance/wallet" class="actions-inline"><input type="hidden" name="name" value="{{ w.name }}">
+      <input name="amount" inputmode="decimal" value="{{ '%g' % w.start }}" style="width:8rem" aria-label="Начальный остаток">
+      <input type="date" name="since" value="{{ w.since }}" aria-label="С какой даты">
+      <button type="submit" class="quiet">Сохранить</button></form></td>
+    <td class="num">{{ rub(w.inc) }}</td><td class="num">{{ rub(w.out) }}</td><td class="num"><b>{{ rub(w.left) }}</b></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% elif tab == 'edit' %}
+<p><a class="reset" href="{{ back }}">← назад</a></p>
+<div class="surface">
+  <h2>{{ op.kind | capitalize }} {{ rub(op.amount) }} · {{ op.status }}</h2>
+  {% if op.question %}<p class="finask__q">Вопрос Claude: {{ op.question }}</p>{% endif %}
+  {% if src %}<p class="tag">{{ src.sender }}, {{ op.day }}{% if op.link %} · <a href="{{ op.link }}" target="_blank" rel="noopener">открыть в Телеграме</a>{% endif %}</p>
+  <blockquote class="finsrc">{{ src.text or '(без текста — вложение)' }}</blockquote>{% endif %}
+  {% if op.paid_note %}<p class="tag">Оплата: {{ op.paid_note }}{% if op.paid_link %} · <a href="{{ op.paid_link }}" target="_blank" rel="noopener">платёжка</a>{% endif %}</p>{% endif %}
+  {% if op.note %}<p class="tag" style="white-space:pre-line">{{ op.note }}</p>{% endif %}
+  {{ opform(op, '/admin/finance/op/' ~ op.id, 'Сохранить') }}
+  <p class="tag">После сохранения Claude эту операцию больше не меняет, а ваш выбор берёт в примеры.</p>
+</div>
+
+{% elif tab == 'dict' %}
+<div class="section"><h2>Справочник</h2><p>По одному названию в строке. Claude разносит только по этим названиям — как назовёте, так и будет в отчётах</p></div>
+<div class="findict">
+  {% for kind, names in d.items() %}
+  <form method="post" action="/admin/finance/dict" class="surface">
+    <h3>{{ kind | capitalize }}</h3>
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <textarea name="names" rows="{{ [names | length + 1, 6] | max }}">{{ names | join('\n') }}</textarea>
+    <button type="submit" class="quiet">Сохранить</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

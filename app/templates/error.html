@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ code }} · Вершина</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <link rel="icon" href="/static/logo-navy.svg">
+</head>
+<body>
+<main class="canvas stop">
+  <p class="stop__code">{{ code }}</p>
+  <h1>{% if code == 403 %}Нет доступа{% elif code == 404 %}Не нашлось{% else %}Не получилось{% endif %}</h1>
+  <p class="head__meta">{{ message }}</p>
+  <p><a href="/">Вернуться на обзор</a></p>
+</main>
+</body>
+</html>

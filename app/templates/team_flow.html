@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ t.title }} · Команды · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <p class="head__meta" style="margin:0 0 var(--space-2xs)"><a href="/teams?flow={{ t.flow.name | urlencode }}">← Все команды {{ t.flow.name }}</a></p>
+  <h1><span class="brace">{</span>{{ t.title }}<span class="brace">}</span></h1>
+  <p class="head__meta">{{ t.full.split('—')[1].strip() if '—' in t.full else '' }}
+    {% if t.mentors %} · менторы: {{ t.mentors | join(', ') }}{% endif %}{% if t.trackers %} · трекер: {{ t.trackers | join(', ') }}{% endif %}
+    {% if t.chat %} · чат: {{ t.chat.title }}{% if t.chat.topic_title %} › {{ t.chat.topic_title }}{% endif %}{% endif %}</p>
+</div>
+
+{% if err %}<p class="alarm">{{ err }}</p>{% endif %}
+{% if msg %}<p class="state">{{ msg }}</p>{% endif %}
+
+{% if tr and tr.members %}
+<div class="section" id="sostoyanie"><h2>Как дела у команды</h2>
+  <p>По последнему разбору созвона и декларациям. Сверху — те, кому сейчас нужнее внимание{% if tr.to_confirm %} · <b>{{ tr.to_confirm }}</b> шаг(ов) участники отметили сами — проверьте{% endif %}</p></div>
+{% if tr.team_note %}
+<div class="surface trekker__note"><p class="tag" style="margin:0">Команда после встречи {{ tr.team_note.call_when[8:10] ~ '.' ~ tr.team_note.call_when[5:7] if tr.team_note.call_when else '' }} «{{ tr.team_note.call_title }}»</p>
+  <p style="margin:var(--space-3xs) 0 0">{{ tr.team_note.note }}</p></div>
+{% endif %}
+<div class="mcards">
+{% for m in tr.members %}
+  <div class="surface mcard mcard--{{ {'выпадает': 'bad', 'буксует': 'warn', 'идёт': 'ok'}.get(m.state, 'none') }}">
+    <div class="mcard__head">
+      <a href="/participants/{{ m.card }}"><b>{{ m.name }}</b></a>
+      <span class="mcard__state">{{ m.state or 'нет разбора созвона' }}</span>
+    </div>
+    <p class="tag" style="margin:var(--space-3xs) 0 0">декларация {{ m.progress }}% · шагов {{ m.steps.done }}/{{ m.steps.total }}
+      {% if m.steps.late %} · <span class="late">просрочено {{ m.steps.late|length }}</span>{% endif %}
+      {% if m.rep %} · отчёты {{ m.rep.done }} из {{ m.rep.of }}{% if m.rep.miss >= 2 %} <span class="late">(нет {{ m.rep.miss }} дн.)</span>{% endif %}{% endif %}</p>
+    {% if m.note %}
+      {% if m.note.alarm %}<p class="mcard__alarm">⚠ {{ m.note.alarm }}</p>{% endif %}
+      {% if m.note.note %}<p class="mcard__p">{{ m.note.note }}</p>{% endif %}
+      {% if m.note.approach %}<p class="mcard__p"><b>Как говорить сейчас:</b> {{ m.note.approach }}</p>{% endif %}
+      {% if m.note.check %}<p class="mcard__p"><b>Прошлые обещания:</b>
+        {% for c in m.note.check %}<span class="promise promise--{{ 'yes' if c.done == true else ('no' if c.done == false else 'na') }}">{{ '✓' if c.done == true else ('✗' if c.done == false else '?') }} {{ c.promise }}</span>{% endfor %}</p>{% endif %}
+      {% if m.note.promises %}<p class="mcard__p"><b>Обещал(а) к следующей:</b> {{ m.note.promises | join('; ') }}</p>{% endif %}
+      <p class="tag" style="margin:var(--space-2xs) 0 0">созвон {{ m.note.call_when[8:10] ~ '.' ~ m.note.call_when[5:7] if m.note.call_when else '' }} «{{ m.note.call_title }}»</p>
+    {% endif %}
+    {% if m.steps.late %}<details class="mcard__p"><summary>Просроченные шаги</summary><ul>{% for s in m.steps.late %}<li>{{ s.title }} <span class="tag">до {{ s.deadline|d }}</span></li>{% endfor %}</ul></details>{% endif %}
+    {% if m.steps.self_marked %}<p class="mcard__p"><b>Отметил(а) сам(а):</b> {% for s in m.steps.self_marked %}{{ s.title }}{{ '; ' if not loop.last }}{% endfor %} — <a href="/participants/{{ m.card }}">проверить</a></p>{% endif %}
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+<div class="section"><h2>Вовлечения</h2></div>
+<div class="surface teamgoal">
+  <div class="teamgoal__big">
+    <span class="teamgoal__n">{{ t.done }}</span>
+    {% if t.goal %}<span class="teamgoal__of">из {{ t.goal }}</span>{% endif %}
+  </div>
+  <div class="teamgoal__body">
+    {% if t.goal %}
+    <div class="board__bar board__bar--big"><span style="width:{{ (t.share * 100) | round(1) }}%"></span></div>
+    <p class="head__meta" style="margin:var(--space-2xs) 0 0">
+      {% if t.left %}Осталось вовлечь {{ t.left }} — {{ (t.share * 100) | round | int }}% пути{% else %}Цель команды взята 🔥{% endif %}</p>
+    {% if t.goal_from == 'дашборд' %}<p class="tag" style="margin:var(--space-3xs) 0 0">Цель — планка команды с листа «Дашборд» в её таблице. Можно поставить свою.</p>{% endif %}
+    {% else %}
+    <p style="margin:0"><b>Цель команды не задана.</b> Сколько человек команда собирается вовлечь за поток?
+      {% if t.plan %}<span class="tag">Сумма личных планок участников — {{ t.plan }}.</span>{% endif %}</p>
+    {% endif %}
+    {% if may_goal %}
+    <form class="filters teamgoal__form" method="post" action="/teams/{{ t.id }}/goal">
+      <label>Цель команды<input name="goal" type="number" min="1" max="10000" value="{{ t.goal or '' }}"
+        placeholder="{{ t.plan or '' }}" style="width:7rem"></label>
+      <button class="{{ 'quiet' if t.goal }}">{{ 'Изменить цель' if t.goal else 'Поставить цель' }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="section"><h2>Кто сколько вовлёк</h2>
+  <p>Личная планка — сколько участник сам взялся вовлечь в своей декларации</p></div>
+<div class="surface surface--flush scroll">
+<table>
+  <thead><tr><th>Участник</th><th class="num">Вовлёк</th><th>Личная планка</th><th>Последний</th><th>Кого и когда</th></tr></thead>
+  <tbody>
+  {% for m in t.members %}
+  <tr>
+    <td><a href="/participants/{{ m.card }}">{{ m.name }}</a></td>
+    <td class="num"><b>{{ m.done }}</b></td>
+    <td>{% if m.plan %}<span class="minimeter"><span style="width:{{ ([m.done / m.plan, 1] | min * 100) | round(1) }}%"></span></span>
+      <span class="tag">{{ m.done }} из {{ m.plan }}</span>{% else %}<span class="tag">не заполнена</span>{% endif %}</td>
+    <td class="nowrap">{{ m.last.strftime('%d.%m') if m.last else '—' }}</td>
+    <td class="invchips">{% for i in m.inv %}<span class="invchip{{ ' invchip--over' if i.over }}">{{ i.label }}</span>{% else %}<span class="tag">—</span>{% endfor %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">В команде пока нет участников — они появятся после чтения таблицы.</td></tr>
+  {% endfor %}
+  {% for r in t.extra %}
+  <tr class="row--extra">
+    <td>{{ r.label }}<span class="sub">{{ 'выбыл(а) — вовлечения засчитаны команде' if r.kind == 'выбыл' else ('уже входит в планку команды — пояснение' if t.flow and not t.sheet else 'по дашборду таблицы команды') }}</span></td>
+    <td class="num">{% if r.kind != 'доля' or t.sheet %}<b>{{ (r.done or 0) | int }}</b>{% endif %}</td>
+    <td>{% if r.plan and (r.kind != 'доля' or t.sheet) %}<span class="tag">{{ (r.done or 0) | int }} из {{ r.plan | int }}</span>{% endif %}</td>
+    <td>—</td><td></td>
+  </tr>
+  {% endfor %}
+  {% if t.dash %}
+  <tr class="row--total"><td><b>Итого по команде</b><span class="sub">как в дашборде таблицы</span></td>
+    <td class="num"><b>{{ t.done }}</b></td><td><span class="tag">{{ t.done }} из {{ t.plan }}</span></td><td></td><td></td></tr>
+  {% endif %}
+  </tbody>
+</table>
+</div>
+
+{% if t.feed %}
+<div class="section"><h2>Лента вовлечений</h2><p>По датам из таблиц. Без даты — внизу</p></div>
+<ul class="surface invfeed">
+  {% for x in t.feed %}
+  <li><span class="invfeed__date">{{ x.date.strftime('%d.%m') if x.date else 'без даты' }}</span>
+    <a href="/participants/{{ x.card }}">{{ x.name }}</a>
+    <span class="tag">{{ x.label }}</span>{% if x.over %} <span class="pill pill--accent">сверх планки</span>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

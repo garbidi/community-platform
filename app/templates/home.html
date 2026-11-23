@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Обзор · Вершина{% endblock %}
+{% block body %}
+<div class="head">
+  <h1><span class="brace">{</span>Обзор<span class="brace">}</span></h1>
+  <p class="head__meta">{{ role_title }}{% if hidden_note %} · {{ hidden_note }}{% endif %}</p>
+</div>
+
+{% if me is defined %}
+  {% include "_inv_board.html" %}
+  {% if me %}
+  <div class="figures">
+    <div><div class="figure__n">{{ mine.count if mine else 0 }}</div><div class="figure__k">ваших вовлечений</div></div>
+    {% if team %}
+    <div><div class="figure__n">{{ team.count }}</div>
+      <div class="figure__k">вовлечений у группы «{{ team.team.title }}»</div></div>
+    {% if team.goal %}
+    <div class="{{ 'figure--flag' if team.left }}"><div class="figure__n">{{ team.left }}</div>
+      <div class="figure__k">осталось до победы, цель {{ team.goal }}</div></div>
+    {% endif %}
+    <div><div class="figure__n">{{ team.members }}</div><div class="figure__k">человек в вашей группе</div></div>
+    {% endif %}
+  </div>
+  <div class="surface">
+    <h2>{% if team %}Ваша группа{% else %}Группа{% endif %}</h2>
+    {% if team %}
+    <p>«{{ team.team.title }}»{% if team.team.flow %}, поток {{ team.team.flow }}{% endif %}:
+      состав, общий счёт и сколько осталось до победы.</p>
+    <p style="margin:0"><a class="more" href="/my-team">Открыть группу</a></p>
+    {% else %}
+    <p style="margin:0">Вы пока не в группе — команды собирает координатор.</p>
+    {% endif %}
+  </div>
+  <p class="limit"><b>Профиля по опроснику пока нет.</b> Типология, сильные стороны и зоны
+    роста появятся, когда психологи сообщества утвердят методику.</p>
+  {% elif inv %}
+  <p><a class="more" href="/me">Мой профиль: декларация, шаги и трекер</a></p>
+  {% else %}
+  <p class="limit"><b>Аккаунт ещё не связан с участником.</b> Связывает координатор —
+    после этого здесь появятся ваши данные.</p>
+  {% endif %}
+
+{% else %}
+  {% if flow_choices|length > 1 %}
+  <div class="flowhook" role="slider" tabindex="0" aria-label="Поток в обзоре"
+       aria-valuemin="0" aria-valuemax="{{ flow_choices|length - 1 }}"
+       aria-valuenow="{{ flow_index }}" aria-valuetext="{{ flow_choices[flow_index].name }}"
+       data-flows='{{ flow_choices | tojson }}' data-index="{{ flow_index }}" data-default="{{ flow_default }}">
+    <div class="flowhook__line"></div>
+    {% for c in flow_choices %}
+    <button type="button" class="flowhook__stop{{ ' is-on' if loop.index0 == flow_index }}" data-i="{{ loop.index0 }}"
+            style="left:{{ (loop.index0 / (flow_choices|length - 1) * 100) | round(3) }}%" tabindex="-1">
+      <span class="flowhook__dot"></span>
+      <span class="flowhook__name">{{ c.name }}</span>
+      <span class="flowhook__sub">{{ c.sub }}</span>
+    </button>
+    {% endfor %}
+    <div class="flowhook__hook" style="left:{{ (flow_index / (flow_choices|length - 1) * 100) | round(3) }}%" aria-hidden="true">
+      <svg viewBox="0 0 28 54" width="28" height="54"><path d="M14 0 V30 a8 8 0 1 1 -8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M6 38 l-3 -5 M6 38 l5 -2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="14" cy="3" r="3" fill="currentColor"/></svg>
+    </div>
+  </div>
+  {% endif %}
+  <div id="flowpane" data-flow="{{ flow.flow if flow else '' }}">
+  {% include "_home_flow.html" %}
+  </div>
+{% endif %}
+
+
+{% if log_stats %}
+<p class="limit">Обращений к чужим профилям за неделю: <b>{{ log_stats.profiles_week }}</b>.
+  <a href="/admin/log">Открыть журнал</a></p>
+{% endif %}
+<script src="/static/deep.js?v={{ v }}" defer></script>
+<script src="/static/flowswitch.js?v={{ v }}" defer></script>
+<script src="/static/planner.js?v={{ v }}" defer></script>
+{% endblock %}

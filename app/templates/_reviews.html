@@ -1,0 +1,51 @@
+{# Разборы по записям: общий блок для карточек ММ5/ММ6 и потока по таблицам #}
+{% if may_analyze %}
+<div class="section" id="razbory"><h2>Разборы по записям</h2>
+  <p>Запись разбора или готовая расшифровка — выжимка для ментора, который ведёт человека весь поток</p></div>
+
+{% for r in reviews %}
+<div class="surface report">
+  <h3 style="margin-top:0">{{ r.title }}{% if r.held_on %} · {{ r.held_on|d }}{% endif %}</h3>
+  {% if r.status == 'готов' %}
+    {{ r.summary_html | safe }}
+    <details style="margin-top:var(--space-sm)"><summary>Расшифровка разбора</summary>
+      <div class="talk__body" style="white-space:pre-wrap;max-height:28rem;overflow:auto;margin-top:var(--space-2xs)">{{ r.transcript }}</div>
+    </details>
+  {% elif r.status == 'ошибка' %}
+    <p><b>Не получилось.</b> {{ r.error }}</p>
+    {% if may_lead %}<form method="post" action="/participants/{{ p.user_id }}/reviews/{{ r.id }}/retry"><button>Попробовать снова</button></form>{% endif %}
+  {% else %}
+    <p style="margin:0"><b>{{ {'ожидает': 'В очереди', 'расшифровка': 'Расшифровывается запись', 'выжимка': 'Готовится выжимка', 'декларация': 'Собирается декларация'}.get(r.status, r.status) }}</b>{% if r.status == 'ожидает' and r.error %} · {{ r.error }}{% endif %}
+      — обновите страницу через несколько минут.</p>
+  {% endif %}
+  {% set d = decls.get(r.id) if decls else none %}
+  {% if r.status == 'готов' and d %}
+  <p class="head__meta" style="margin:var(--space-sm) 0 0">
+    <b>Декларация из разбора:</b>
+    {% if d.status == 'подтверждена' %}<span class="state">подтверждена</span> {{ d.confirmed_by }} · {{ d.confirmed_at|stamp }}
+    {% else %}<span class="state state--quiet">черновик</span> — цели и шаги в блоке «Цели на поток», проверьте и подтвердите{% endif %}
+  </p>
+  {% if d.status != 'подтверждена' and may_lead %}
+  <form method="post" action="/participants/{{ p.user_id }}/reviews/{{ r.id }}/confirm" style="margin-top:var(--space-2xs)"><button>Подтвердить декларацию</button></form>
+  {% endif %}
+  {% endif %}
+  <p class="report__meta">Загрузил {{ r.added_by }} · {{ r.created_at|stamp }} · файл {{ r.source_name }}</p>
+  {% if may_lead %}
+  <form method="post" action="/participants/{{ p.user_id }}/reviews/{{ r.id }}/remove"><button class="quiet">Удалить разбор</button></form>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if may_lead %}
+<form class="filters filters--stack surface" method="post" action="/participants/{{ p.user_id }}/reviews" enctype="multipart/form-data">
+  <label>Дата разбора<input name="held_on" type="date" value="{{ today }}"></label>
+  <label class="grow">Название<input name="title" placeholder="Разбор на 4-дневном мастермайнде, 9 ноября"></label>
+  <label class="grow">Запись или расшифровка<input name="file" type="file" accept="audio/*,video/*,.txt,.md" required></label>
+  <button type="submit">Загрузить разбор</button>
+</form>
+<p class="limit">Звук расшифровывается на сервере и не уходит наружу; выжимку пишет Claude по тексту расшифровки. Загрузка записывается в журнал доступа.</p>
+{% elif not reviews %}
+<div class="surface"><p style="margin:0">Разборов пока не загружено.</p></div>
+{% endif %}
+{% endif %}
+
